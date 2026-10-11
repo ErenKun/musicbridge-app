@@ -1,0 +1,22 @@
+{
+  "project": {
+    "name": "MusicBridge",
+    "developer": "Eren Teknoloji",
+    "version": "1.0.0",
+    "license_enforced": false
+  },
+  "server": {
+    "http_port": 8765,
+    "websocket_port": 8765,
+    "host": "0.0.0.0"
+  },
+  "youtube_music": {
+    "th_ch_api_url": "http://127.0.0.1:13091",
+    "poll_interval_ms": 1000
+  },
+  "network": {
+    "lan_enabled": true,
+    "tailscale_enabled": true,
+    "tailscale_hostname": ""
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "musicbridge-pc-core",
+  "version": "1.0.0",
+  "description": "MusicBridge PC Server - Eren Teknoloji",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

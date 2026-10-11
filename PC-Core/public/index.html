@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>MusicBridge - Eren Teknoloji</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Üst Başlık & Durum -->
+    <header class="header">
+      <div class="brand">
+        <span class="logo-dot"></span>
+        <span class="brand-title">MusicBridge</span>
+      </div>
+      <div class="connection-status" id="conn-badge">
+        <span class="status-indicator"></span>
+        <span id="conn-text">Bağlanıyor...</span>
+      </div>
+    </header>
+
+    <!-- Sekme Başlıkları -->
+    <nav class="nav-tabs">
+      <button class="tab-btn active" onclick="switchView('player-view')">Çalar</button>
+      <button class="tab-btn" onclick="switchView('queue-view')">Kuyruk</button>
+      <button class="tab-btn" onclick="switchView('network-view')">Bağlantı</button>
+    </nav>
+
+    <!-- GÖRÜNÜM 1: MÜZİK ÇALAR -->
+    <main id="player-view" class="view active">
+      <!-- Albüm Kapağı -->
+      <div class="artwork-wrapper">
+        <div class="artwork-card" id="artwork-card">
+          <img id="track-art" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24'%3E%3Cpath fill='%236366f1' d='M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z'/%3E%3C/svg%3E" alt="Albüm Kapağı">
+        </div>
+      </div>
+
+      <!-- Şarkı Bilgisi -->
+      <div class="track-details">
+        <h2 id="track-title" class="track-title">Müzik Bekleniyor...</h2>
+        <p id="track-artist" class="track-artist">YouTube Music</p>
+      </div>
+
+      <!-- İlerleme Çubuğu -->
+      <div class="progress-section">
+        <div class="progress-bar-container" onclick="handleSeek(event)">
+          <div class="progress-bar-fill" id="progress-fill"></div>
+        </div>
+        <div class="time-display">
+          <span id="curr-time">00:00</span>
+          <span id="total-time">00:00</span>
+        </div>
+      </div>
+
+      <!-- Ana Medya Kontrolleri -->
+      <div class="controls-row">
+        <button class="control-btn" onclick="sendCmd('previous')" title="Önceki">
+          <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+        </button>
+        <button class="control-btn play-btn" onclick="sendCmd('playPause')" id="play-pause-btn" title="Oynat/Duraklat">
+          <svg viewBox="0 0 24 24" id="play-icon"><path d="M8 5v14l11-7z"/></svg>
+        </button>
+        <button class="control-btn" onclick="sendCmd('next')" title="Sonraki">
+          <svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+        </button>
+      </div>
+
+      <!-- Ses Seviyesi -->
+      <div class="volume-container">
+        <svg class="vol-icon" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+        <input type="range" min="0" max="100" value="75" id="vol-slider" oninput="handleVolume(this.value)">
+        <span id="vol-label">75%</span>
+      </div>
+
+      <!-- NewPipe Aksiyon Kartı -->
+      <div class="newpipe-card">
+        <div class="newpipe-info">
+          <span class="newpipe-title">NewPipe'ta Devam Et</span>
+          <span class="newpipe-desc">Şarkıyı telefonunda tam kaldığı saniyeden aç</span>
+        </div>
+        <button class="btn-newpipe" onclick="triggerNewPipeResume()">
+          <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+          Telefonda Aç
+        </button>
+      </div>
+    </main>
+
+    <!-- GÖRÜNÜM 2: KUYRUK / SIRADAKİLER -->
+    <section id="queue-view" class="view">
+      <div class="queue-header">
+        <h3>Sıradaki Parçalar</h3>
+        <span class="queue-count" id="queue-count">0 Parça</span>
+      </div>
+      <div class="queue-list" id="queue-list">
+        <p class="empty-state">Kuyruk bilgisi bulunamadı veya oynatıcı kapalı.</p>
+      </div>
+    </section>
+
+    <!-- GÖRÜNÜM 3: BAĞLANTI & TAILSCALE -->
+    <section id="network-view" class="view">
+      <div class="net-card">
+        <h3>Ağ & Cihaz Durumu</h3>
+        <div class="net-row">
+          <span>Sunucu:</span>
+          <strong id="net-host">Tespit ediliyor...</strong>
+        </div>
+        <div class="net-row">
+          <span>Tailscale:</span>
+          <strong id="net-tailscale">Kontrol ediliyor...</strong>
+        </div>
+        <div class="net-row">
+          <span>Huawei Saat Köprüsü:</span>
+          <strong class="text-emerald">Hazır (MediaSession)</strong>
+        </div>
+      </div>
+      <p class="help-text">
+        Bu ekran doğrudan PC'den servis edilmektedir. PC'de yapılan arayüz değişiklikleri sayfayı yenileyince anında yansır.
+      </p>
+    </section>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
