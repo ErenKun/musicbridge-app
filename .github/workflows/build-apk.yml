@@ -30,7 +30,10 @@ jobs:
 
     - name: Android APK'yi Derle
       working-directory: Android-MicroShell
-      run: gradle assembleDebug --no-daemon --stacktrace
+      run: |
+        gradle wrapper --gradle-version 8.5
+        chmod +x gradlew
+        ./gradlew assembleDebug --no-daemon --stacktrace
 
     - name: APK Dosyasini Yayina Hazirla
       run: |
