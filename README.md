@@ -10,10 +10,8 @@
   <img src="https://img.shields.io/badge/Akıllı%20Saat-Huawei%20Watch%20%7C%20WearOS%20%7C%20AVRCP-10b981?style=for-the-badge&logo=huawei&logoColor=white" alt="Akıllı Saat" />
   <img src="https://img.shields.io/badge/Ağ%20Gecikmesi-%3C%208ms%20(LAN%20%2F%20Mesh)-purple?style=for-the-badge" alt="Gecikme" />
   <img src="https://img.shields.io/badge/Bellek%20Kullanımı-%3C%2020%20MB%20RAM-pink?style=for-the-badge" alt="RAM" />
-  <img src="https://img.shields.io/badge/Ağ-Wi--Fi%20%2B%20Tailscale%20Mesh-f59e0b?style=for-the-badge&logo=tailscale&logoColor=white" alt="Tailscale" />
+  <a href="https://linktr.ee/erennkun" target="_blank"><img src="https://img.shields.io/badge/Geliştirici-Eren%20Teknoloji-43e55e?style=for-the-badge&logo=linktree&logoColor=white" alt="Eren Teknoloji Linktree" /></a>
 </p>
-
-<p align="center">
   <b>Masaüstü bilgisayarınızda çalan YouTube Music ve web ortam seslerini akıllı telefonunuzdan ve akıllı saatinizden sıfır gecikmeyle yönetin; masadan kalktığınızda tek tıkla NewPipe üzerinden kaldığı saniyeden dinlemeye devam edin.</b>
 </p>
 
@@ -117,8 +115,19 @@ Kablo bağlamanıza gerek yok! Bilgisayarınızda `start.bat` açıkken:
 
 ---
 
+## 🔗 İletişim & Ekosistem
+
 <div align="center">
 
-Geliştirici: **Eren Teknoloji** • Açık Kaynaklı Özgür Yazılım © 2026
+<a href="https://linktr.ee/erennkun" target="_blank">
+  <img src="https://img.shields.io/badge/Linktree-Eren%20Teknoloji-43e55e?style=for-the-badge&logo=linktree&logoColor=white" alt="Linktree" />
+</a>
+<a href="https://github.com/ErenKun" target="_blank">
+  <img src="https://img.shields.io/badge/GitHub-ErenKun-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub" />
+</a>
+
+<br/><br/>
+
+Geliştirici: [**Eren Teknoloji**](https://linktr.ee/erennkun) • Açık Kaynaklı Özgür Yazılım © 2026
 
 </div>
