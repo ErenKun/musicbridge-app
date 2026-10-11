@@ -15,6 +15,10 @@
   <b>Masaüstü bilgisayarınızda çalan YouTube Music ve web ortam seslerini akıllı telefonunuzdan ve akıllı saatinizden sıfır gecikmeyle yönetin; masadan kalktığınızda tek tıkla NewPipe üzerinden kaldığı saniyeden dinlemeye devam edin.</b>
 </p>
 
+<p align="center">
+  <img src="MusicBridge-Afis.png" alt="MusicBridge Tanıtım Afişi" style="max-width: 100%; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.6);" />
+</p>
+
 ---
 
 </div>
@@ -105,6 +109,18 @@ Kablo bağlamanıza gerek yok! Bilgisayarınızda `start.bat` açıkken:
    * Şarkı adı ve sanatçı saat ekranında anlık görünür.
    * Play / Pause / Sonraki Parça kontrolleri milisaniyeler içinde PC'yi tetikler.
    * Saatin ses tuşları PC'nin sistem sesini açıp kısar.
+
+---
+
+## 📱 Uygulama Ekran Görüntüleri
+
+<div align="center">
+
+| Mobil Oynatıcı | Huawei Saat Senkronu | Canlı Kuyruk | NewPipe Aktarımı |
+|:---:|:---:|:---:|:---:|
+| <img src="MusicBridge-Player-Screenshot.png" width="220" style="border-radius:14px;" /> | <img src="MusicBridge-Watch-Screenshot.png" width="220" style="border-radius:14px;" /> | <img src="MusicBridge-Queue-Screenshot.png" width="220" style="border-radius:14px;" /> | <img src="MusicBridge-NewPipe-Screenshot.png" width="220" style="border-radius:14px;" /> |
+
+</div>
 
 ---
 

@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MusicBridge | Proje Detayı | Eren Kün - Eren Teknoloji</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@300;400;600&family=Dancing+Script:wght@700&display=swap');
+
+        :root {
+            --primary: #6366f1;
+            --primary-glow: rgba(99, 102, 241, 0.4);
+            --bg-dark: #0a0e17;
+            --glass: rgba(255, 255, 255, 0.03);
+            --border: rgba(255, 255, 255, 0.08);
+            --glow: 0 0 35px rgba(99, 102, 241, 0.35);
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-dark);
+            color: #f8fafc;
+            overflow-x: hidden;
+            line-height: 1.6;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            cursor: none !important;
+        }
+
+        .wrapper {
+            width: 100%;
+        }
+
+        .section-block {
+            min-height: 80vh;
+            padding: 70px 20px 90px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            box-sizing: border-box;
+        }
+
+        @keyframes stickyGlow {
+            0%, 100% {
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 20px rgba(99, 102, 241, 0.3);
+                border-color: rgba(99, 102, 241, 0.6);
+            }
+            50% {
+                box-shadow: 0 12px 35px rgba(0, 0, 0, 0.8), 0 0 35px rgba(99, 102, 241, 0.6);
+                border-color: #ffffff;
+            }
+        }
+
+        .sticky-title {
+            position: sticky;
+            top: 20px;
+            z-index: 80;
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(10, 14, 23, 0.88));
+            backdrop-filter: blur(20px);
+            border: 1.5px solid var(--primary);
+            padding: 12px 38px;
+            border-radius: 50px;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: clamp(1.5rem, 3.5vw, 2.2rem);
+            color: #ffffff;
+            margin: 0 auto 40px auto;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            text-align: center;
+            animation: stickyGlow 4s infinite ease-in-out;
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .sticky-title:hover {
+            transform: scale(1.05);
+            color: var(--primary);
+        }
+
+        .sticky-title i {
+            color: var(--primary);
+            font-size: 1.1em;
+            filter: drop-shadow(0 0 8px var(--primary));
+        }
+
+        .progress-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            z-index: 99999;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: var(--primary);
+            width: 0%;
+            box-shadow: 0 0 15px var(--primary);
+            transition: width 0.1s ease;
+        }
+
+        .side-nav {
+            position: fixed;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            z-index: 1000;
+        }
+
+        .nav-dot {
+            width: 14px;
+            height: 14px;
+            border: 2px solid var(--primary);
+            border-radius: 50%;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            cursor: pointer !important;
+            background: transparent;
+        }
+
+        .nav-dot:hover {
+            transform: scale(1.3);
+            background: rgba(99, 102, 241, 0.4);
+        }
+
+        .nav-dot.active {
+            background: var(--primary);
+            transform: scale(1.6);
+            box-shadow: 0 0 20px var(--primary);
+        }
+
+        #cursor {
+            width: 28px;
+            height: 28px;
+            border: 2px solid var(--primary);
+            border-radius: 50%;
+            position: fixed;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            z-index: 100000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.06s ease-out, width 0.3s, height 0.3s, background-color 0.3s, border-color 0.3s, opacity 0.3s;
+            box-shadow: 0 0 15px rgba(99, 102, 241, 0.3);
+        }
+
+        #cursor-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--primary);
+            border-radius: 50%;
+            pointer-events: none;
+            transition: width 0.2s, height 0.2s, background-color 0.2s;
+        }
+
+        #cursor.hovered {
+            width: 52px;
+            height: 52px;
+            background: rgba(99, 102, 241, 0.15);
+            border-color: #ffffff;
+            box-shadow: 0 0 25px rgba(99, 102, 241, 0.6);
+        }
+
+        #cursor.hovered #cursor-dot {
+            width: 8px;
+            height: 8px;
+            background: #ffffff;
+        }
+
+        @media (max-width: 768px), (hover: none) and (pointer: coarse) {
+            * { cursor: auto !important; }
+            #cursor, .side-nav { display: none !important; }
+            .section-block { min-height: auto; padding: 60px 15px; }
+        }
+
+        .fixed-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -2;
+            background: radial-gradient(circle at 80% 20%, #1e1b4b, transparent), radial-gradient(circle at 20% 80%, #0f172a, transparent), #0a0e17;
+        }
+
+        .bg-grid {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: radial-gradient(var(--primary) 0.6px, transparent 0.6px);
+            background-size: 40px 40px;
+            opacity: 0.08;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .reveal-content {
+            opacity: 0;
+            transform: translateY(40px) scale(0.98);
+            transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1), filter 0.8s ease;
+            filter: blur(8px);
+            will-change: opacity, transform, filter;
+            width: 100%;
+            max-width: 1100px;
+        }
+
+        .section-block.active .reveal-content {
+            opacity: 1 !important;
+            transform: translateY(0) scale(1) !important;
+            filter: blur(0px) !important;
+        }
+
+        .project-hero {
+            text-align: center;
+            gap: 20px;
+        }
+
+        .project-hero h1 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: clamp(3rem, 10vw, 5.5rem);
+            letter-spacing: -3px;
+            color: #fff;
+            text-transform: uppercase;
+        }
+
+        .back-btn {
+            padding: 12px 35px;
+            border: 1.5px solid var(--primary);
+            color: var(--primary);
+            text-decoration: none;
+            border-radius: 50px;
+            font-weight: 700;
+            transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .back-btn:hover {
+            background: var(--primary);
+            color: #fff;
+            box-shadow: var(--glow);
+            transform: scale(1.08);
+        }
+
+        .content-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            align-items: center;
+            width: 100%;
+        }
+
+        @media (max-width: 768px) {
+            .content-section {
+                grid-template-columns: 1fr;
+                text-align: center;
+            }
+        }
+
+        .text-block p {
+            font-size: 1.15rem;
+            color: #cbd5e1;
+            margin-bottom: 18px;
+            line-height: 1.7;
+        }
+
+        .img-block img {
+            width: 100%;
+            border-radius: 30px;
+            border: 1px solid var(--border);
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.6);
+            object-fit: cover;
+            transition: 0.4s;
+            cursor: pointer !important;
+        }
+
+        .img-block img:hover {
+            transform: scale(1.04);
+            border-color: var(--primary);
+            box-shadow: var(--glow);
+        }
+
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 25px;
+            margin-top: 30px;
+            width: 100%;
+        }
+
+        .gallery-item {
+            border-radius: 20px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            height: 280px;
+            transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            cursor: pointer !important;
+        }
+
+        .gallery-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: 0.6s;
+        }
+
+        .gallery-item:hover {
+            border-color: var(--primary);
+            transform: translateY(-8px);
+            box-shadow: var(--glow);
+        }
+
+        .gallery-item:hover img {
+            transform: scale(1.08);
+        }
+
+        .sticky-story-container {
+            width: 100%;
+            position: relative;
+            margin-top: 40px;
+        }
+
+        .story-item {
+            height: 450vh;
+            width: 100%;
+            position: relative;
+        }
+
+        .story-sticky-content {
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            width: 100%;
+            display: grid;
+            place-items: center;
+            opacity: 0;
+            transform: translateY(80px);
+            transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+            pointer-events: none;
+        }
+
+        .story-sticky-content.visible {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+
+        .story-sticky-content.fading-out {
+            opacity: 0;
+            transform: translateY(-150px) scale(0.95);
+            pointer-events: none;
+        }
+
+        .story-text,
+        .story-media {
+            grid-area: 1 / 1;
+        }
+
+        .story-text {
+            max-width: 900px;
+            padding: 0 20px;
+            z-index: 2;
+            text-align: center;
+            transition: opacity 0.8s ease, transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .story-text h3 {
+            font-size: clamp(2rem, 5vw, 3.8rem);
+            font-family: 'Space Grotesk', sans-serif;
+            color: var(--primary);
+            margin-bottom: 15px;
+            letter-spacing: -2px;
+            text-shadow: 0 5px 25px rgba(0, 0, 0, 0.8);
+        }
+
+        .story-text p {
+            font-size: clamp(1.2rem, 2.5vw, 1.5rem);
+            color: #e2e8f0;
+            line-height: 1.6;
+            margin: 0;
+            text-shadow: 0 3px 15px rgba(0, 0, 0, 0.8);
+        }
+
+        .story-media {
+            width: fit-content;
+            height: fit-content;
+            max-width: 95vw;
+            max-height: 85vh;
+            border-radius: 30px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            box-shadow: 0 40px 100px rgba(0, 0, 0, 0.9);
+            opacity: 0;
+            transform: scale(0.6) translateY(20vh);
+            transition: opacity 1s cubic-bezier(0.16, 1, 0.3, 1), transform 1s cubic-bezier(0.16, 1, 0.3, 1);
+            background: #000;
+            display: flex;
+        }
+
+        .story-gif {
+            max-width: 95vw;
+            max-height: 85vh;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            cursor: pointer !important;
+        }
+
+        .story-sticky-content.media-visible .story-text {
+            opacity: 0;
+            transform: translateY(-100px) scale(0.9);
+            pointer-events: none;
+        }
+
+        .story-sticky-content.media-visible .story-media {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+        }
+
+        footer {
+            background: #03050a;
+            text-align: center;
+            border-top: 1px solid var(--border);
+            min-height: 100vh;
+        }
+
+        .signature-wrapper {
+            display: flex;
+            justify-content: center;
+            width: 100%;
+            margin: 20px 0;
+            overflow: hidden;
+        }
+
+        .signature {
+            font-family: 'Dancing Script', cursive;
+            font-size: clamp(4rem, 12vw, 7rem);
+            color: var(--primary);
+            transform: rotate(-6deg);
+            text-shadow: 0 0 35px rgba(99, 102, 241, 0.5);
+            white-space: nowrap;
+            clip-path: polygon(0 0, 0 0, 0 100%, 0% 100%);
+            transition: clip-path 4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .signature.draw {
+            clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+        }
+
+        .social-links {
+            display: flex;
+            justify-content: center;
+            gap: 25px;
+            margin: 30px 0;
+        }
+
+        .social-btn {
+            width: 65px;
+            height: 65px;
+            background: var(--glass);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 1.8rem;
+            transition: 0.3s;
+            text-decoration: none;
+        }
+
+        .social-btn:hover {
+            background: var(--primary);
+            color: #fff;
+            transform: translateY(-8px) scale(1.08);
+            box-shadow: var(--glow);
+        }
+
+        #backToTop {
+            position: fixed;
+            bottom: 40px;
+            right: 30px;
+            width: 55px;
+            height: 55px;
+            background: var(--primary);
+            color: #fff;
+            border-radius: 18px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            font-size: 1.6rem;
+            box-shadow: var(--glow);
+            transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        #backToTop:hover {
+            transform: translateY(-10px) scale(1.15) rotate(5deg);
+            background: #fff;
+            color: #000;
+        }
+
+        .lightbox-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(3, 5, 10, 0.95);
+            backdrop-filter: blur(25px);
+            z-index: 60000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .lightbox-modal.active {
+            opacity: 1;
+        }
+
+        .lightbox-modal img {
+            max-width: 90vw;
+            max-height: 85vh;
+            border-radius: 20px;
+            border: 2px solid var(--primary);
+            box-shadow: 0 0 50px rgba(99, 102, 241, 0.4);
+            object-fit: contain;
+            transform: scale(0.9);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .lightbox-modal.active img {
+            transform: scale(1);
+        }
+
+        .lightbox-close {
+            position: absolute;
+            top: 25px;
+            right: 30px;
+            font-size: 2.8rem;
+            color: var(--primary);
+            cursor: pointer !important;
+            transition: 0.3s;
+            line-height: 1;
+            z-index: 60001;
+        }
+
+        .lightbox-close:hover {
+            color: #fff;
+            transform: rotate(90deg) scale(1.2);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="progress-container">
+        <div class="progress-bar" id="myBar"></div>
+    </div>
+
+    <div id="cursor">
+        <div id="cursor-dot"></div>
+    </div>
+    <div id="backToTop" onclick="window.scrollTo({top: 0, behavior: 'smooth'})"><i class="fa-solid fa-arrow-up"></i></div>
+
+    <div class="side-nav">
+        <div class="nav-dot active" data-target="header" title="Başlık"></div>
+        <div class="nav-dot" data-target="info1" title="Vizyon"></div>
+        <div class="nav-dot" data-target="info2" title="Teknoloji"></div>
+        <div class="nav-dot" data-target="info3" title="Gelecek"></div>
+        <div class="nav-dot" data-target="animations" title="İşlevler"></div>
+        <div class="nav-dot" data-target="gallery-sec" title="Galeri"></div>
+        <div class="nav-dot" data-target="footer" title="İmza"></div>
+    </div>
+
+    <div class="fixed-bg"></div>
+    <div class="bg-grid"></div>
+
+    <div class="wrapper">
+        <!-- HERO / BAŞLIK -->
+        <section class="section-block project-hero" id="header">
+            <div class="reveal-content" style="text-align: center;">
+                <p style="color: var(--primary); font-weight: 700; letter-spacing: 3px;">EREN TEKNOLOJİ • EKOSİSTEM PROJESİ</p>
+                <img src="musicbridge-icon.png" alt="MusicBridge İkonu"
+                    style="width: 130px; height: 130px; margin: 20px auto; border-radius: 30px; box-shadow: 0 15px 35px rgba(0,0,0,0.5), 0 0 30px rgba(99, 102, 241, 0.4); display: block;">
+                <h1>MUSICBRIDGE</h1>
+                <p style="color: #94a3b8; font-size: 1.25rem; max-width: 720px; margin: 0 auto;">
+                    Masaüstü PC'de çalan YouTube Music akışını telefonunuzdan ve Huawei Watch Fit 4 saatinizden sıfır gecikmeyle yönetin; tek tıkla NewPipe'ta kaldığı saniyeden devam ettirin!
+                </p>
+                <div style="display: flex; justify-content: center; gap: 15px; flex-wrap: wrap;">
+                    <a href="https://github.com/ErenKun/musicbridge-app" target="_blank" class="back-btn" style="background: var(--primary); color: #fff;">
+                        <i class="fa-brands fa-github"></i> GitHub Deposu
+                    </a>
+                    <a href="https://linktr.ee/erennkun" target="_blank" class="back-btn">
+                        <i class="fa-solid fa-arrow-left-long"></i> Portfolyoya Dön
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <!-- BÖLÜM 1: VİZYON & ÇÖZÜM -->
+        <section class="section-block" id="info1">
+            <div class="reveal-content content-section">
+                <div class="text-block" style="grid-column: 1 / -1; text-align: center;">
+                    <h2 class="sticky-title"><i class="fa-solid fa-hand-sparkles"></i> Vizyon & Çözüm</h2>
+                </div>
+                <div class="text-block">
+                    <p> > <b>Sıfır Kurulumlu Saat Denetimi:</b> Huawei Watch Fit 4 saatinize harici hiçbir uygulama kurmadan, telefonun yerel medya denetimi sayesinde PC'deki YouTube Music'i doğrudan bileğinizden kontrol edin.</p>
+                    <p> > <b>Kaldığı Saniyeden NewPipe Devamı:</b> Bilgisayar başından kalktığınızda şarkıyı telefonunuzdaki NewPipe uygulamasında milisaniyesiyle (örn: 02:18) kulaklığınızda başlatın.</p>
+                    <p> > <b>Ultra Hafif Mimari:</b> Ağır kütüphaneler yerine sadece ~15 MB RAM tüketen saf yerel Android servisi sayesinde kilit ekranında bile arka planda kapanmaz.</p>
+                </div>
+                <div class="img-block">
+                    <img src="MusicBridge-Player-Screenshot.png" alt="MusicBridge Mobil Çalar Ekranı">
+                </div>
+            </div>
+        </section>
+
+        <!-- BÖLÜM 2: TEKNOLOJİ & YAPILANLAR -->
+        <section class="section-block" id="info2">
+            <div class="reveal-content content-section">
+                <div class="text-block" style="grid-column: 1 / -1; text-align: center;">
+                    <h2 class="sticky-title"><i class="fa-solid fa-microchip"></i> Teknoloji & Yapılanlar</h2>
+                </div>
+                <div class="img-block">
+                    <img src="MusicBridge-Watch-Screenshot.png" alt="Huawei Watch Fit 4 Canlı Senkronizasyon">
+                </div>
+                <div class="text-block">
+                    <p> > <b>Çift Yönlü WebSocket Köprüsü:</b> PC ile telefon arasında 150 baytlık ultra-hafif JSON paketleri ile 8 milisaniyenin altında gecikmeyle gerçek zamanlı çift yönlü haberleşme.</p>
+                    <p> > <b>Tailscale WireGuard Mesh Desteği:</b> Yalnızca ev Wi-Fi ağında değil; Tailscale entegrasyonu sayesinde mobil veride (4.5G) dışarıdayken dahi PC sesini ve parçaları yönetebilme.</p>
+                    <p> > <b>Sanal MediaSessionCompat:</b> Android işletim sistemine resmi medya oynatıcısı olduğunu bildirerek Huawei Health ve Bluetooth AVRCP protokollerini doğrudan tetikleme.</p>
+                    <p> > <b>Sıfır APK Kur-Sil Döngüsü:</b> Arayüzün PC sunucusundan anlık servis edilmesiyle, telefona APK yükle-sil yapmadan PC'de yapılan değişikliklerin anında telefona yansıması.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- BÖLÜM 3: GELECEK PLANLARI -->
+        <section class="section-block" id="info3">
+            <div class="reveal-content content-section">
+                <div class="text-block" style="grid-column: 1 / -1; text-align: center;">
+                    <h2 class="sticky-title"><i class="fa-solid fa-compass-drafting"></i> İleride Neler Var?</h2>
+                </div>
+                <div class="text-block">
+                    <p> > <b>Gerçek Zamanlı Ses Akışı:</b> İkinci fazda PC'deki sistem sesini ve müziği sıfır gecikmeyle doğrudan telefon hoparlörüne ve kulaklığına kablosuz aktarma yeteneği.</p>
+                    <p> > <b>Toplu Playlist SQLite Enjeksiyonu:</b> PC'deki 50+ parçalık YouTube Music çalma listelerini NewPipe veritabanına otomatik paketleyip içe aktarma.</p>
+                    <p> > <b>Eren Teknoloji Ekosistem Lisanslama:</b> Cihaz kimliği (EDI) ve PythonAnywhere lisans doğrulama desteğiyle ticari dağıtıma ve çoklu kullanıcıya hazır altyapı.</p>
+                </div>
+                <div class="img-block">
+                    <img src="MusicBridge-NewPipe-Screenshot.png" alt="NewPipe Anında Devam Akışı">
+                </div>
+            </div>
+        </section>
+
+        <!-- BÖLÜM 4: HİKAYE & ANİMASYONLU İŞLEVLER -->
+        <section class="section-block" id="animations" style="padding: 60px 0 0 0; min-height: auto;">
+            <div class="reveal-content" style="text-align: center; width: 100%; margin-bottom: 40px;">
+                <h2 class="sticky-title"><i class="fa-solid fa-play"></i> İşlevler & Deneyim</h2>
+            </div>
+
+            <div class="sticky-story-container">
+                <!-- HİKAYE 1 -->
+                <div class="story-item">
+                    <div class="story-sticky-content">
+                        <div class="story-text">
+                            <h3>Bilekten PC Medya Kontrolü</h3>
+                            <p>Huawei Watch Fit 4 saatinizdeki Play/Pause ve Ses tuşları, telefonunuzun ekranı kilitli olsa bile PC'deki YouTube Music'i milisaniyeler içinde yönetir.</p>
+                        </div>
+                        <div class="story-media">
+                            <img src="MusicBridge-Watch-Screenshot.png" alt="Huawei Saat Senkronu" class="story-gif">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- HİKAYE 2 -->
+                <div class="story-item">
+                    <div class="story-sticky-content">
+                        <div class="story-text">
+                            <h3>NewPipe Kaldığı Yerden Devam</h3>
+                            <p>Masadan kalktığınız an "Telefonda Aç" butonuna dokunun; parça tam kaldığı saniyeden telefonunuzda NewPipe ile kulaklığınıza geçsin.</p>
+                        </div>
+                        <div class="story-media">
+                            <img src="MusicBridge-NewPipe-Screenshot.png" alt="NewPipe Devam" class="story-gif">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- HİKAYE 3 -->
+                <div class="story-item">
+                    <div class="story-sticky-content">
+                        <div class="story-text">
+                            <h3>Canlı Kuyruk & Sıradakiler</h3>
+                            <p>PC'de çalan çalma listesindeki tüm şarkılar telefonunuzda anlık listelenir, istediğiniz parçaya tek dokunuşla atlayabilirsiniz.</p>
+                        </div>
+                        <div class="story-media">
+                            <img src="MusicBridge-Queue-Screenshot.png" alt="Canlı Kuyruk" class="story-gif">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- BÖLÜM 5: PROJE GALERİSİ -->
+        <section class="section-block" id="gallery-sec">
+            <div class="reveal-content" style="text-align: center; width: 100%;">
+                <h2 class="sticky-title"><i class="fa-regular fa-images"></i> Proje Galerisi</h2>
+                <div class="gallery-grid">
+                    <div class="gallery-item"><img src="MusicBridge-Afis.png" alt="MusicBridge Tanıtım Afişi"></div>
+                    <div class="gallery-item"><img src="MusicBridge-Player-Screenshot.png" alt="Mobil Oynatıcı Ekranı"></div>
+                    <div class="gallery-item"><img src="MusicBridge-Watch-Screenshot.png" alt="Huawei Saat Canlı Ekranı"></div>
+                    <div class="gallery-item"><img src="MusicBridge-Queue-Screenshot.png" alt="Sıradaki Parçalar Kuyruğu"></div>
+                    <div class="gallery-item"><img src="MusicBridge-NewPipe-Screenshot.png" alt="NewPipe Aktarım Akışı"></div>
+                    <div class="gallery-item"><img src="musicbridge-icon.png" alt="Uygulama İkonu"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- FOOTER / İMZA -->
+        <footer class="section-block" id="footer">
+            <div class="reveal-content" style="text-align: center;">
+                <h2 style="font-family: 'Space Grotesk'; font-size: clamp(2.5rem, 6vw, 4rem); color: #fff; margin-bottom: 25px; letter-spacing: -2px;">
+                    EREN TEKNOLOJİ
+                </h2>
+                <p style="font-family: 'Space Grotesk'; font-size: clamp(1.5rem, 4vw, 2.5rem); font-weight: 700; color: #fff;">
+                    " Sadece Bugünü Değil, Geleceği Tasarlıyoruz! "
+                </p>
+                <div class="signature-wrapper">
+                    <p class="signature" id="signature">Eren Kün</p>
+                </div>
+                <div class="social-links">
+                    <a href="https://linktr.ee/erennkun" class="social-btn" title="Linktree" style="color: #43e55e;" target="_blank">
+                        <i class="fa-solid fa-link"></i>
+                    </a>
+                    <a href="https://github.com/ErenKun/musicbridge-app" class="social-btn" title="GitHub Deposu" style="color: #6366f1;" target="_blank">
+                        <i class="fa-brands fa-github"></i>
+                    </a>
+                    <a href="https://erenteknoloji.statuspage.io/" class="social-btn status-btn" title="Status Page" target="_blank">
+                        <i class="fa-solid fa-server"></i>
+                    </a>
+                </div>
+                <p style="font-size: 0.85rem; opacity: 0.35; margin-top: 25px;">
+                    &copy; 2026 Eren KÜN - Eren Teknoloji. Tüm Hakları Saklıdır.
+                </p>
+            </div>
+        </footer>
+    </div>
+
+    <!-- LIGHTBOX MODAL -->
+    <div id="imageLightbox" class="lightbox-modal">
+        <span class="lightbox-close" onclick="closeLightbox()">&times;</span>
+        <img id="lightboxImg" src="" alt="Büyütülmüş Görsel">
+    </div>
+
+    <script>
+        const cursor = document.getElementById('cursor');
+        document.addEventListener('mousemove', (e) => {
+            const x = e.clientX; const y = e.clientY;
+            const isHovered = cursor.classList.contains('hovered');
+            const offset = isHovered ? 26 : 14;
+            cursor.style.transform = `translate3d(${x - offset}px, ${y - offset}px, 0)`;
+        });
+
+        document.addEventListener('mouseleave', () => { cursor.style.opacity = '0'; });
+        document.addEventListener('mouseenter', () => { cursor.style.opacity = '1'; });
+
+        document.querySelectorAll('a, button, .gallery-item, .nav-dot, .img-block img, .story-gif, .lightbox-close, .sticky-title').forEach(el => {
+            el.addEventListener('mouseenter', () => cursor.classList.add('hovered'));
+            el.addEventListener('mouseleave', () => cursor.classList.remove('hovered'));
+        });
+
+        function openLightbox(src) {
+            const lb = document.getElementById('imageLightbox');
+            const img = document.getElementById('lightboxImg');
+            img.src = src;
+            lb.style.display = 'flex';
+            setTimeout(() => lb.classList.add('active'), 10);
+            document.body.style.overflow = 'hidden';
+        }
+        function closeLightbox() {
+            const lb = document.getElementById('imageLightbox');
+            lb.classList.remove('active');
+            setTimeout(() => { lb.style.display = 'none'; document.body.style.overflow = 'auto'; }, 200);
+        }
+        document.getElementById('imageLightbox').addEventListener('click', (e) => {
+            if (e.target.id === 'imageLightbox') closeLightbox();
+        });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLightbox(); });
+
+        document.querySelectorAll('.img-block img, .gallery-item img, .story-gif').forEach(img => {
+            img.addEventListener('click', () => openLightbox(img.src));
+        });
+
+        window.onscroll = function () {
+            let winScroll = document.body.scrollTop || document.documentElement.scrollTop;
+            let height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+            document.getElementById("myBar").style.width = (winScroll / height) * 100 + "%";
+            document.getElementById('backToTop').style.display = (winScroll > 500) ? "flex" : "none";
+        };
+
+        document.querySelectorAll('.nav-dot').forEach(dot => {
+            dot.addEventListener('click', () => {
+                const targetId = dot.getAttribute('data-target');
+                const targetEl = document.getElementById(targetId);
+                if (targetEl) targetEl.scrollIntoView({ behavior: 'smooth' });
+            });
+        });
+
+        const observerOptions = { root: null, rootMargin: '0px 0px -20% 0px', threshold: 0.15 };
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('active');
+                    const targetId = entry.target.id;
+                    const d = document.querySelector(`.nav-dot[data-target="${targetId}"]`);
+                    if (d) { document.querySelectorAll('.nav-dot').forEach(x => x.classList.remove('active')); d.classList.add('active'); }
+                    if (targetId === 'footer') document.getElementById('signature').classList.add('draw');
+                } else {
+                    entry.target.classList.remove('active');
+                    if (entry.target.id === 'footer') document.getElementById('signature').classList.remove('draw');
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.section-block').forEach(el => observer.observe(el));
+
+        window.addEventListener('scroll', () => {
+            const items = document.querySelectorAll('.story-item');
+            const windowHeight = window.innerHeight;
+
+            items.forEach(item => {
+                const rect = item.getBoundingClientRect();
+                const content = item.querySelector('.story-sticky-content');
+
+                if (rect.top < windowHeight * 0.8 && rect.bottom > windowHeight * 0.6) {
+                    content.classList.add('visible');
+                    content.classList.remove('fading-out');
+                } else if (rect.bottom <= windowHeight * 0.6) {
+                    content.classList.remove('visible');
+                    content.classList.add('fading-out');
+                } else {
+                    content.classList.remove('visible', 'fading-out');
+                }
+
+                if (rect.top < -windowHeight * 1.0 && rect.bottom > windowHeight * 0.6) {
+                    content.classList.add('media-visible');
+                } else {
+                    content.classList.remove('media-visible');
+                }
+            });
+        });
+    </script>
+
+    <!--Start of Tawk.to Script-->
+    <script type="text/javascript">
+        var Tawk_API = Tawk_API || {}, Tawk_LoadStart = new Date();
+        (function () {
+            var s1 = document.createElement("script"), s0 = document.getElementsByTagName("script")[0];
+            s1.async = true;
+            s1.src = 'https://embed.tawk.to/6a7366067121431d416e0e92/1jv9cd27c';
+            s1.charset = 'UTF-8';
+            s1.setAttribute('crossorigin', '*');
+            s0.parentNode.insertBefore(s1, s0);
+        })();
+        Tawk_API.onChatMaximized = function () {
+            document.documentElement.style.setProperty('background-color', '#0a0e17', 'important');
+            document.body.style.setProperty('background-color', '#0a0e17', 'important');
+        };
+        Tawk_API.onChatMinimized = function () {
+            document.documentElement.style.setProperty('background-color', '#0a0e17', 'important');
+            document.body.style.setProperty('background-color', '#0a0e17', 'important');
+            document.documentElement.style.removeProperty('position');
+            document.body.style.removeProperty('position');
+            document.documentElement.style.removeProperty('height');
+            document.body.style.removeProperty('height');
+            document.documentElement.style.overflow = 'auto';
+            document.body.style.overflow = 'auto';
+            document.documentElement.style.overflowX = 'hidden';
+            document.body.style.overflowX = 'hidden';
+            window.dispatchEvent(new Event('resize'));
+        };
+        Tawk_API.onChatHidden = function () {
+            document.documentElement.style.setProperty('background-color', '#0a0e17', 'important');
+            document.body.style.setProperty('background-color', '#0a0e17', 'important');
+            document.documentElement.style.overflowX = 'hidden';
+            document.body.style.overflowX = 'hidden';
+        };
+
+        const ensureDarkBg = () => {
+            if (document.documentElement.style.backgroundColor !== '#0a0e17') {
+                document.documentElement.style.setProperty('background-color', '#0a0e17', 'important');
+            }
+            if (document.body && document.body.style.backgroundColor !== '#0a0e17') {
+                document.body.style.setProperty('background-color', '#0a0e17', 'important');
+            }
+        };
+        const mutObs = new MutationObserver(ensureDarkBg);
+        mutObs.observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'class'] });
+        if (document.body) mutObs.observe(document.body, { attributes: true, attributeFilter: ['style', 'class'] });
+    </script>
+    <!--End of Tawk.to Script-->
+</body>
+
+</html>
