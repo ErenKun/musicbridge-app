@@ -126,17 +126,53 @@ async function resolveHighResTrackInfo(title, artist) {
   if (trackKey === lastResolvedTrack) return;
   lastResolvedTrack = trackKey;
 
-  // Başlıktan parantez içi ekleri temizle (Örn: "Song Title (Official Video)" -> "Song Title")
-  const cleanTitle = title.replace(/\(.*?\)|\[.*?\]/g, '').trim();
-  const cleanArtist = (artist && artist !== 'YouTube Music' && artist !== 'Spotify') ? artist.trim() : '';
+  // Başlıktan parantez içi ekleri ve "feat" kısımlarını temizle
+  let cleanTitle = title.replace(/\(.*?\)|\[.*?\]/g, '').replace(/feat\..*/i, '').trim();
+  let cleanArtist = (artist && !artist.includes('YouTube') && !artist.includes('Spotify')) ? artist.trim() : '';
+
+  // Eğer başlık "Sanatçı - Şarkı" formatındaysa parçala
+  if (cleanTitle.includes(' - ') && !cleanArtist) {
+    const parts = cleanTitle.split(' - ');
+    cleanArtist = parts[0].trim();
+    cleanTitle = parts.slice(1).join(' - ').trim();
+  }
+
   const query = `${cleanTitle} ${cleanArtist}`.trim();
 
   let resolvedArtwork = null;
   let resolvedVideoId = null;
 
-  // 1. YouTube Video ID Çözümleme (Telefonda "Telefonda Aç" butonu için)
-  // DİKKAT: YouTube arama sonuçları klip, vlog veya alakasız videolar olabildiği için
-  // kapak görseli olarak ASLA KULLANILMAZ! Sadece videoId alınır.
+  // 1. iTunes Search API (Müzik albümleri için kristal netliğinde 600x600 resmi kare kapak)
+  try {
+    const itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=1`;
+    const itunesRes = await fetch(itunesUrl, { signal: AbortSignal.timeout(3000) });
+    if (itunesRes.ok) {
+      const itunesData = await itunesRes.json();
+      if (itunesData.results && itunesData.results.length > 0) {
+        const item = itunesData.results[0];
+        if (item.artworkUrl100) {
+          resolvedArtwork = item.artworkUrl100.replace('100x100bb', '600x600bb');
+        }
+      }
+    }
+  } catch (e) {}
+
+  // 2. Deezer API (iTunes bulamazsa alternatif resmi 1000x1000 kare kapak)
+  if (!resolvedArtwork) {
+    try {
+      const dzUrl = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=1`;
+      const dzRes = await fetch(dzUrl, { signal: AbortSignal.timeout(3000) });
+      if (dzRes.ok) {
+        const dzData = await dzRes.json();
+        if (dzData.data && dzData.data.length > 0) {
+          const item = dzData.data[0];
+          resolvedArtwork = item.album?.cover_xl || item.album?.cover_big;
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 3. YouTube Search (Telefonda açmak için Video ID ve Doğrulanmış HD Görsel)
   try {
     const ytUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
     const ytRes = await fetch(ytUrl, {
@@ -145,35 +181,43 @@ async function resolveHighResTrackInfo(title, artist) {
     });
     if (ytRes.ok) {
       const html = await ytRes.text();
-      const match = html.match(/\/watch\?v=([a-zA-Z0-9_-]{11})/);
+      const regex = /"videoRenderer":\{"videoId":"([a-zA-Z0-9_-]{11})",.*?"title":\{"runs":\[\{"text":"(.*?)"\}/;
+      const match = regex.exec(html);
       if (match && match[1]) {
-        resolvedVideoId = match[1];
+        const vid = match[1];
+        const vTitle = match[2];
+        resolvedVideoId = vid;
+
+        // GÜVENLİK FİLTRESİ: Video başlığı aranan şarkı veya sanatçı sözcüklerini gerçekten içeriyor mu?
+        // Bu sayede vlog, karşılaştırma vb. rastgele alakasız videoların kapakları ASLA çekilmez!
+        const titleWords = cleanTitle.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+        const artistWords = cleanArtist.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+        const searchPool = [...titleWords, ...artistWords];
+        const vTitleLower = vTitle.toLowerCase();
+        const isLegitMatch = searchPool.length === 0 || searchPool.some(w => vTitleLower.includes(w));
+
+        if (isLegitMatch && !resolvedArtwork) {
+          // sddefault (640x480) yüksek çözünürlük desteğini test et
+          try {
+            const sdUrl = `https://i.ytimg.com/vi/${vid}/sddefault.jpg`;
+            const checkRes = await fetch(sdUrl, { method: 'HEAD', signal: AbortSignal.timeout(2000) });
+            if (checkRes.status === 200) {
+              resolvedArtwork = sdUrl;
+            } else {
+              resolvedArtwork = `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`;
+            }
+          } catch (_) {
+            resolvedArtwork = `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`;
+          }
+        }
       }
     }
   } catch (e) {}
 
-  // 2. iTunes Search API (SADECE mevcut GSMTC kapağı yoksa resmi müzik albüm kapağı arar)
-  if (!currentState.artwork) {
-    try {
-      const itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=1`;
-      const itunesRes = await fetch(itunesUrl, { signal: AbortSignal.timeout(3000) });
-      if (itunesRes.ok) {
-        const itunesData = await itunesRes.json();
-        if (itunesData.results && itunesData.results.length > 0) {
-          const item = itunesData.results[0];
-          if (item.artworkUrl100) {
-            resolvedArtwork = item.artworkUrl100.replace('100x100bb', '600x600bb');
-          }
-        }
-      }
-    } catch (e) {}
-  }
-
-  // Eğer parça hala değişmediyse bilgileri güncelle ve yayınla
+  // Eğer parça hala aynıysa yüksek çözünürlüklü kapak ve videoId bilgilerini yayınla
   if (currentState.title === title && currentState.artist === artist) {
     let updated = false;
-    // Sadece resmi iTunes albüm kapağı bulunduysa ve hala kapak yoksa ekle
-    if (resolvedArtwork && !currentState.artwork) {
+    if (resolvedArtwork && currentState.artwork !== resolvedArtwork) {
       currentState.artwork = resolvedArtwork;
       updated = true;
     }
@@ -186,7 +230,7 @@ async function resolveHighResTrackInfo(title, artist) {
     }
   }
 
-  // 3. Akıllı Kuyruk / Benzer Şarkılar (Kuyruk boşsa listeyi doldur)
+  // 4. Akıllı Kuyruk / Benzer Şarkılar (Kuyruk boşsa listeyi doldur)
   if (!currentState.queue || currentState.queue.length === 0 || currentState.queue[0]?.isRecommendation) {
     fetchRecommendedQueue(cleanTitle, cleanArtist);
   }
@@ -299,13 +343,14 @@ function startWindowsMediaBridge() {
               currentState.duration = 0;
               lastResolvedTrack = '';
             } else {
-              // Yeni parça başladıysa veya mevcut kapak boşsa GSMTC kapağını al
-              if (payload.artwork) {
+              if (trackChanged) {
+                // Yeni parça başladığında ilk başta GSMTC kapağını göster (varsa)
+                currentState.artwork = payload.artwork || '';
+              } else if (!currentState.artwork && payload.artwork) {
+                // Henüz hiçbir kapak yoksa GSMTC kapağını al
                 currentState.artwork = payload.artwork;
-              } else if (trackChanged) {
-                // Şarkı geçişinde henüz GSMTC'den yeni kapak gelmediyse eski şarkının kapağını tutma
-                currentState.artwork = '';
               }
+              // Eğer resolveHighResTrackInfo tarafından HD kapak atandıysa, GSMTC'nin düşük çözünürlüklü kapağı HD kapağı ezmez!
             }
 
             currentState.isPlaying = isWaiting ? false : !!payload.isPlaying;
@@ -315,8 +360,8 @@ function startWindowsMediaBridge() {
               currentState.volume = payload.volume;
             }
 
-            // Yeni parça başladığında videoId ve gerekirse iTunes albüm kapağı çöz
-            if (trackChanged && !isWaiting) {
+            // Çalan parça henüz HD çözülmediyse videoId ve HD albüm kapağını getir
+            if (!isWaiting && lastResolvedTrack !== `${currentState.title}|${currentState.artist}`) {
               resolveHighResTrackInfo(currentState.title, currentState.artist);
             }
 
