@@ -32,6 +32,60 @@
 
     <!-- GÖRÜNÜM 1: MÜZİK ÇALAR -->
     <main id="player-view" class="view active">
+      <!-- Windows Medya Oturum & Kaynak Seçici -->
+      <div class="session-selector-container">
+        <div class="session-selector-bar">
+          <button class="session-nav-btn" onclick="sendCmd('prevSession')" title="Önceki Medya (Windows Ok Tuşu)" id="prev-session-btn">
+            <svg viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+          </button>
+          
+          <button class="session-pill-btn" onclick="toggleSessionMenu()" id="session-pill-btn" title="Oynatma Kaynağını Seç / Sabitle">
+            <span class="session-source-icon" id="session-icon">🎵</span>
+            <span class="session-source-name" id="session-name">YouTube Music</span>
+            <span class="session-counter" id="session-counter">(1/1)</span>
+            <span class="session-pin-badge" id="session-pin-badge" title="Sabit Kaynak">📌</span>
+            <svg class="session-chevron" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>
+          </button>
+
+          <button class="session-nav-btn" onclick="sendCmd('nextSession')" title="Sonraki Medya (Windows Ok Tuşu)" id="next-session-btn">
+            <svg viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+          </button>
+        </div>
+
+        <!-- Açılır Kaynak & Oturum Seçim Menüsü -->
+        <div class="session-dropdown" id="session-dropdown">
+          <div class="dropdown-header">
+            <span>Medya Kaynağı & Sabitleme</span>
+            <button class="dropdown-close-btn" onclick="toggleSessionMenu(false)">✕</button>
+          </div>
+          <div class="dropdown-options">
+            <button class="dropdown-item" id="opt-pin-auto" onclick="selectPinMode('auto')">
+              <span class="item-icon">⚡</span>
+              <div class="item-text">
+                <span class="item-title">Otomatik (Windows Aktif)</span>
+                <span class="item-sub">En son oynatılan veya odaklanan medyayı takip eder</span>
+              </div>
+              <span class="item-check">✓</span>
+            </button>
+            <button class="dropdown-item" id="opt-pin-ytmusic" onclick="selectPinMode('youtube_music')">
+              <span class="item-icon">📌</span>
+              <div class="item-text">
+                <span class="item-title">YouTube Music'e Sabitle</span>
+                <span class="item-sub">Başka video açılsa bile YouTube Music'i sabit tutar</span>
+              </div>
+              <span class="item-check">✓</span>
+            </button>
+          </div>
+          <div class="dropdown-divider"></div>
+          <div class="dropdown-header-sm">
+            <span>Açık Olan Medyalar</span>
+          </div>
+          <div class="dropdown-sessions-list" id="dropdown-sessions-list">
+            <!-- JavaScript ile doldurulur -->
+          </div>
+        </div>
+      </div>
+
       <!-- Albüm Kapağı -->
       <div class="artwork-wrapper">
         <div class="artwork-card" id="artwork-card">

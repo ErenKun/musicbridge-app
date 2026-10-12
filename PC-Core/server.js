@@ -34,7 +34,12 @@ let currentState = {
   duration: 0,
   volume: 50,
   videoId: '',
-  queue: []
+  queue: [],
+  sourceApp: 'YouTube Music',
+  sessions: [],
+  activeSessionIndex: 0,
+  totalSessions: 1,
+  pinnedSource: 'auto'
 };
 
 // Windows Başlangıç Kısayolu Yolu
@@ -232,7 +237,14 @@ function startWindowsMediaBridge() {
           const payload = JSON.parse(trimmed);
           if (payload.type === 'media') {
             const trackChanged = currentState.title !== payload.title || currentState.artist !== payload.artist;
+            const sessionsChanged = currentState.activeSessionIndex !== payload.activeSessionIndex ||
+                                    currentState.totalSessions !== payload.totalSessions ||
+                                    currentState.pinnedSource !== payload.pinnedSource ||
+                                    currentState.sourceApp !== payload.sourceApp ||
+                                    JSON.stringify(currentState.sessions) !== JSON.stringify(payload.sessions || []);
+
             const isChanged = trackChanged ||
+                              sessionsChanged ||
                               currentState.isPlaying !== payload.isPlaying ||
                               currentState.volume !== payload.volume ||
                               currentState.currentTime !== payload.currentTime ||
@@ -242,6 +254,11 @@ function startWindowsMediaBridge() {
             currentState.title = payload.title || 'Müzik Bekleniyor...';
             currentState.artist = payload.artist || 'YouTube Music';
             currentState.album = payload.album || '';
+            currentState.sourceApp = payload.sourceApp || 'Medya Oynatıcı';
+            currentState.sessions = Array.isArray(payload.sessions) ? payload.sessions : [];
+            currentState.activeSessionIndex = typeof payload.activeSessionIndex === 'number' ? payload.activeSessionIndex : 0;
+            currentState.totalSessions = typeof payload.totalSessions === 'number' ? payload.totalSessions : 0;
+            currentState.pinnedSource = payload.pinnedSource || 'auto';
             
             // Eğer yeni parça geldiyse veya mevcut kapak boşsa GSMTC kapağını al
             if (payload.artwork && (!currentState.artwork || trackChanged)) {
@@ -458,6 +475,22 @@ async function executeMediaCommand(action, data) {
   // Konum değiştirme komutu geldiyse anında yansıt
   if (action === 'seekTo') {
     currentState.currentTime = Math.floor(Number(data));
+    broadcast({ type: 'track-change', data: currentState });
+  }
+
+  // Kaynak sabitleme ve oturum seçme komutlarını anında yansıt
+  if (action === 'pinSource') {
+    currentState.pinnedSource = String(data);
+    broadcast({ type: 'track-change', data: currentState });
+  }
+
+  if (action === 'selectSession') {
+    if (data === 'auto') {
+      currentState.pinnedSource = 'auto';
+    } else {
+      currentState.pinnedSource = 'manual';
+      currentState.activeSessionIndex = Number(data);
+    }
     broadcast({ type: 'track-change', data: currentState });
   }
 

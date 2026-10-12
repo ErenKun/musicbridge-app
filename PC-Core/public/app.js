@@ -13,7 +13,12 @@ let currentTrack = {
   volume: 50,
   videoId: '',
   artwork: '',
-  queue: []
+  queue: [],
+  sourceApp: 'YouTube Music',
+  sessions: [],
+  activeSessionIndex: 0,
+  totalSessions: 1,
+  pinnedSource: 'auto'
 };
 
 // Sayfa geçişleri
@@ -159,6 +164,9 @@ function updateUI(data) {
 
   // Kuyruk Listesi
   renderQueue(currentTrack.queue);
+
+  // Windows Medya Oturumu & Kaynak Seçici Arayüzü
+  updateSessionUI();
 
   // ANDROID MICRO-SHELL (HUAWEI SAAT) SENKRONİZASYONU
   if (window.ErenBridge) {
@@ -457,6 +465,139 @@ async function toggleStartup(enable) {
     showToast('Ayar kaydedilemedi.');
   }
 }
+
+// -------------------------------------------------------------
+// WINDOWS MEDYA OTURUM YÖNETİMİ VE KAYNAK SABİTLEME
+// -------------------------------------------------------------
+function getSourceIcon(app) {
+  if (!app) return '🎵';
+  const lower = app.toLowerCase();
+  if (lower.includes('youtube music')) return '🎵';
+  if (lower.includes('youtube')) return '▶️';
+  if (lower.includes('spotify')) return '🎧';
+  if (lower.includes('tarayıcı') || lower.includes('chrome') || lower.includes('edge') || lower.includes('brave') || lower.includes('browser')) return '🌐';
+  return '📻';
+}
+
+function updateSessionUI() {
+  const iconEl = document.getElementById('session-icon');
+  const nameEl = document.getElementById('session-name');
+  const counterEl = document.getElementById('session-counter');
+  const pinBadgeEl = document.getElementById('session-pin-badge');
+  const prevBtn = document.getElementById('prev-session-btn');
+  const nextBtn = document.getElementById('next-session-btn');
+
+  const sourceApp = currentTrack.sourceApp || 'Medya Oynatıcı';
+  if (iconEl) iconEl.innerText = getSourceIcon(sourceApp);
+  if (nameEl) nameEl.innerText = sourceApp;
+
+  const total = Math.max(1, currentTrack.totalSessions || (currentTrack.sessions ? currentTrack.sessions.length : 1));
+  const activeIdx = Math.min(total - 1, Math.max(0, currentTrack.activeSessionIndex || 0));
+  if (counterEl) counterEl.innerText = `(${activeIdx + 1}/${total})`;
+
+  // Sabitleme rozeti
+  const isPinned = currentTrack.pinnedSource === 'youtube_music' || currentTrack.pinnedSource === 'manual';
+  if (pinBadgeEl) {
+    if (isPinned) {
+      pinBadgeEl.classList.add('show');
+      pinBadgeEl.title = currentTrack.pinnedSource === 'youtube_music' ? 'Sabitlendi: YouTube Music' : 'Sabitlendi: Özel Oturum';
+    } else {
+      pinBadgeEl.classList.remove('show');
+    }
+  }
+
+  // Ok tuşları opaklığı
+  if (prevBtn) prevBtn.style.opacity = (total > 1) ? '1' : '0.35';
+  if (nextBtn) nextBtn.style.opacity = (total > 1) ? '1' : '0.35';
+
+  // Açılır menü aktiflik sınıfları
+  const optAuto = document.getElementById('opt-pin-auto');
+  const optYt = document.getElementById('opt-pin-ytmusic');
+  if (optAuto) {
+    if (currentTrack.pinnedSource === 'auto') optAuto.classList.add('active');
+    else optAuto.classList.remove('active');
+  }
+  if (optYt) {
+    if (currentTrack.pinnedSource === 'youtube_music') optYt.classList.add('active');
+    else optYt.classList.remove('active');
+  }
+
+  // Oturum listesini oluştur
+  renderSessionsList();
+}
+
+function renderSessionsList() {
+  const listEl = document.getElementById('dropdown-sessions-list');
+  if (!listEl) return;
+
+  const sessions = currentTrack.sessions || [];
+  if (sessions.length === 0) {
+    listEl.innerHTML = '<div style="font-size:0.75rem; color:var(--text-muted); text-align:center; padding:8px 4px;">Aktif medya oturumu bulunamadı</div>';
+    return;
+  }
+
+  let html = '';
+  sessions.forEach((s, idx) => {
+    const isCur = (s.id === currentTrack.activeSessionIndex) || (idx === currentTrack.activeSessionIndex);
+    const sIcon = getSourceIcon(s.app);
+    const badgeText = s.isPlaying ? 'Oynatılıyor' : 'Duraklatıldı';
+    const badgeClass = s.isPlaying ? 'session-item-badge' : 'session-item-badge paused';
+    const activeClass = isCur ? 'dropdown-item active' : 'dropdown-item';
+
+    html += `
+      <button class="${activeClass}" onclick="selectSession(${s.id})">
+        <span class="item-icon">${sIcon}</span>
+        <div class="item-text">
+          <span class="item-title">${escapeHtml(s.title || 'Bilinmiyor')}</span>
+          <span class="item-sub">${escapeHtml(s.artist || s.app)}</span>
+        </div>
+        <span class="${badgeClass}">${badgeText}</span>
+        <span class="item-check">✓</span>
+      </button>
+    `;
+  });
+  listEl.innerHTML = html;
+}
+
+function toggleSessionMenu(force) {
+  const dropdown = document.getElementById('session-dropdown');
+  const pillBtn = document.getElementById('session-pill-btn');
+  if (!dropdown) return;
+
+  const shouldShow = (typeof force === 'boolean') ? force : !dropdown.classList.contains('show');
+  if (shouldShow) {
+    dropdown.classList.add('show');
+    if (pillBtn) pillBtn.classList.add('open');
+    renderSessionsList();
+  } else {
+    dropdown.classList.remove('show');
+    if (pillBtn) pillBtn.classList.remove('open');
+  }
+}
+
+function selectPinMode(mode) {
+  sendCmd('pinSource', mode);
+  toggleSessionMenu(false);
+  if (mode === 'youtube_music') {
+    showToast('📌 YouTube Music sabitlendi!');
+  } else {
+    showToast('⚡ Otomatik mod aktif');
+  }
+}
+
+function selectSession(id) {
+  sendCmd('selectSession', id);
+  toggleSessionMenu(false);
+  showToast('🎯 Medya oturumu seçildi');
+}
+
+// Menü dışına tıklandığında açılır menüyü kapat
+document.addEventListener('click', (e) => {
+  const container = document.querySelector('.session-selector-container');
+  if (container && !container.contains(e.target)) {
+    toggleSessionMenu(false);
+  }
+});
 
 // Başlat
 window.addEventListener('DOMContentLoaded', () => {

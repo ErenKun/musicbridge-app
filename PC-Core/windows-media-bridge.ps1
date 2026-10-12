@@ -141,6 +141,9 @@ $asStreamMethod = [System.IO.WindowsRuntimeStreamExtensions].GetMethods() | Wher
 $mgrOp = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()
 $manager = Await-AsyncOp $mgrOp ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
 
+$selectedSessionIndex = -1
+$pinnedSource = "auto"
+$resolvedIndex = 0
 $lastArtKey = ""
 $cachedArtB64 = ""
 $artRetryCount = 0
@@ -154,6 +157,9 @@ function Send-JsonPayload($obj) {
 
 # 4. Ana Döngü
 while ($true) {
+    # Oturum listesini her döngüde taze al
+    $rawSessions = @($manager.GetSessions())
+
     # 4a. Gelen komutları çalıştır
     $cmdRaw = [MusicBridgeNative.CommandQueue]::Dequeue()
     while ($null -ne $cmdRaw) {
@@ -164,22 +170,60 @@ while ($true) {
 
             if ($action -eq "setVolume") {
                 [MusicBridgeNative.MasterAudio]::SetVolume([float]$data)
+            } elseif ($action -eq "nextSession") {
+                if ($rawSessions.Count -gt 1) {
+                    $pinnedSource = "manual"
+                    $curIdx = if ($resolvedIndex -ge 0 -and $resolvedIndex -lt $rawSessions.Count) { $resolvedIndex } else { 0 }
+                    $selectedSessionIndex = ($curIdx + 1) % $rawSessions.Count
+                    $resolvedIndex = $selectedSessionIndex
+                }
+            } elseif ($action -eq "prevSession") {
+                if ($rawSessions.Count -gt 1) {
+                    $pinnedSource = "manual"
+                    $curIdx = if ($resolvedIndex -ge 0 -and $resolvedIndex -lt $rawSessions.Count) { $resolvedIndex } else { 0 }
+                    $selectedSessionIndex = ($curIdx - 1 + $rawSessions.Count) % $rawSessions.Count
+                    $resolvedIndex = $selectedSessionIndex
+                }
+            } elseif ($action -eq "selectSession") {
+                if ($data -eq "auto") {
+                    $pinnedSource = "auto"
+                    $selectedSessionIndex = -1
+                } else {
+                    $pinnedSource = "manual"
+                    $selectedSessionIndex = [int]$data
+                    $resolvedIndex = $selectedSessionIndex
+                }
+            } elseif ($action -eq "pinSource") {
+                $pinnedSource = [string]$data
+                if ($pinnedSource -eq "auto") {
+                    $selectedSessionIndex = -1
+                }
             } else {
-                $curSession = $manager.GetCurrentSession()
-                if ($curSession) {
+                # Medya taşıma komutları: Hedef oturuma uygula
+                $cmdTarget = $null
+                if ($selectedSessionIndex -ge 0 -and $selectedSessionIndex -lt $rawSessions.Count) {
+                    $cmdTarget = $rawSessions[$selectedSessionIndex]
+                } else {
+                    $cmdTarget = $manager.GetCurrentSession()
+                    if (-not $cmdTarget -and $rawSessions.Count -gt 0) {
+                        $cmdTarget = $rawSessions[0]
+                    }
+                }
+
+                if ($cmdTarget) {
                     if ($action -eq "playPause") {
-                        Await-AsyncOp ($curSession.TryTogglePlayPauseAsync()) ([bool]) | Out-Null
+                        Await-AsyncOp ($cmdTarget.TryTogglePlayPauseAsync()) ([bool]) | Out-Null
                     } elseif ($action -eq "play") {
-                        Await-AsyncOp ($curSession.TryPlayAsync()) ([bool]) | Out-Null
+                        Await-AsyncOp ($cmdTarget.TryPlayAsync()) ([bool]) | Out-Null
                     } elseif ($action -eq "pause") {
-                        Await-AsyncOp ($curSession.TryPauseAsync()) ([bool]) | Out-Null
+                        Await-AsyncOp ($cmdTarget.TryPauseAsync()) ([bool]) | Out-Null
                     } elseif ($action -eq "next") {
-                        Await-AsyncOp ($curSession.TrySkipNextAsync()) ([bool]) | Out-Null
+                        Await-AsyncOp ($cmdTarget.TrySkipNextAsync()) ([bool]) | Out-Null
                     } elseif ($action -eq "previous") {
-                        Await-AsyncOp ($curSession.TrySkipPreviousAsync()) ([bool]) | Out-Null
+                        Await-AsyncOp ($cmdTarget.TrySkipPreviousAsync()) ([bool]) | Out-Null
                     } elseif ($action -eq "seekTo") {
                         $ts = [TimeSpan]::FromSeconds([double]$data)
-                        $curSession.TryChangePlaybackPositionAsync($ts.Ticks) | Out-Null
+                        $cmdTarget.TryChangePlaybackPositionAsync($ts.Ticks) | Out-Null
                     }
                 }
             }
@@ -187,20 +231,95 @@ while ($true) {
         $cmdRaw = [MusicBridgeNative.CommandQueue]::Dequeue()
     }
 
-    # 4b. Güncel Medya ve Ses Durumunu Okuyup UTF-8 JSON Olarak Node.js'e Bildir
+    # 4b. Güncel Medya ve Oturum Durumlarını Çözümle
     try {
         $curVol = [MusicBridgeNative.MasterAudio]::GetVolume()
-        $session = $manager.GetCurrentSession()
 
-        if ($session) {
-            $propsOp = $session.TryGetMediaPropertiesAsync()
+        # Tüm oturumların meta verilerini hazırla
+        $sessionsInfo = @()
+        for ($i = 0; $i -lt $rawSessions.Count; $i++) {
+            $s = $rawSessions[$i]
+            $sAppId = if ($s.SourceAppUserModelId) { $s.SourceAppUserModelId } else { "" }
+            $sProps = Await-AsyncOp ($s.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])
+            $sPlayInfo = $s.GetPlaybackInfo()
+
+            $sTitle = if ($sProps -and $sProps.Title) { $sProps.Title.Trim() } else { "Bilinmiyor" }
+            $sArtist = if ($sProps -and $sProps.Artist) { $sProps.Artist.Trim() } else { "" }
+
+            # Anlaşılır uygulama adı tespiti
+            $sAppName = "Medya Oynatıcı"
+            if ($sAppId -like "*Spotify*") {
+                $sAppName = "Spotify"
+            } elseif ($sAppId -like "*cinhimbnkkghhklpknlkffjgod*" -or $sTitle -like "*YouTube Music*" -or $sArtist -like "*YouTube Music*") {
+                $sAppName = "YouTube Music"
+            } elseif ($sAppId -like "*Chrome*" -or $sAppId -like "*Edge*" -or $sAppId -like "*Brave*") {
+                if ($sTitle -like "*YouTube*" -or $sArtist -like "*YouTube*" -or $sAppId -like "*agimnkijcamfeangaknmldooml*") {
+                    $sAppName = "YouTube"
+                } else {
+                    $sAppName = "Web Tarayıcı"
+                }
+            }
+
+            $isSPlaying = ($sPlayInfo -and $sPlayInfo.PlaybackStatus -eq [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionPlaybackStatus]::Playing)
+
+            $sessionsInfo += @{
+                id = $i
+                app = $sAppName
+                title = $sTitle
+                artist = $sArtist
+                isPlaying = $isSPlaying
+            }
+        }
+
+        # Aktif / Hedef oturumu belirle
+        $targetSession = $null
+        $resolvedIndex = 0
+
+        # Kural 1: YouTube Music'e sabitleme modu aktifse
+        if ($pinnedSource -eq "youtube_music") {
+            for ($i = 0; $i -lt $sessionsInfo.Count; $i++) {
+                if ($sessionsInfo[$i].app -eq "YouTube Music" -or $sessionsInfo[$i].title -like "*YouTube Music*") {
+                    $targetSession = $rawSessions[$i]
+                    $resolvedIndex = $i
+                    $selectedSessionIndex = $i
+                    break
+                }
+            }
+        }
+        
+        # Kural 2: Kullanıcı belirli bir oturumu elle seçtiyse (Manuel / Ok tuşları)
+        if (-not $targetSession -and $pinnedSource -eq "manual" -and $selectedSessionIndex -ge 0 -and $selectedSessionIndex -lt $rawSessions.Count) {
+            $targetSession = $rawSessions[$selectedSessionIndex]
+            $resolvedIndex = $selectedSessionIndex
+        }
+
+        # Kural 3: Otomatik mod (Windows en son oynatılan veya ilk oturum)
+        if (-not $targetSession) {
+            $winCurrent = $manager.GetCurrentSession()
+            if ($winCurrent) {
+                $targetSession = $winCurrent
+                for ($i = 0; $i -lt $rawSessions.Count; $i++) {
+                    if ($rawSessions[$i].SourceAppUserModelId -eq $winCurrent.SourceAppUserModelId) {
+                        $resolvedIndex = $i
+                        break
+                    }
+                }
+            } elseif ($rawSessions.Count -gt 0) {
+                $targetSession = $rawSessions[0]
+                $resolvedIndex = 0
+            }
+        }
+
+        if ($targetSession) {
+            $propsOp = $targetSession.TryGetMediaPropertiesAsync()
             $props = Await-AsyncOp $propsOp ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])
-            $timeline = $session.GetTimelineProperties()
-            $playback = $session.GetPlaybackInfo()
+            $timeline = $targetSession.GetTimelineProperties()
+            $playback = $targetSession.GetPlaybackInfo()
 
-            $title = if ($props.Title) { $props.Title.Trim() } else { "Bilinmiyor" }
-            $artist = if ($props.Artist) { $props.Artist.Trim() } else { "YouTube Music" }
-            $album = if ($props.AlbumTitle) { $props.AlbumTitle.Trim() } else { "" }
+            $title = if ($props -and $props.Title) { $props.Title.Trim() } else { "Bilinmiyor" }
+            $artist = if ($props -and $props.Artist) { $props.Artist.Trim() } else { "" }
+            $album = if ($props -and $props.AlbumTitle) { $props.AlbumTitle.Trim() } else { "" }
+            $activeApp = if ($sessionsInfo.Count -gt $resolvedIndex) { $sessionsInfo[$resolvedIndex].app } else { "Medya Oynatıcı" }
 
             # Albüm kapağı: Parça değiştiğinde veya henüz kapak yüklenemediyse tekrar dene
             $artKey = "$title|$artist"
@@ -212,7 +331,7 @@ while ($true) {
 
             if ([string]::IsNullOrEmpty($cachedArtB64) -and $artRetryCount -lt 15) {
                 $artRetryCount++
-                if ($props.Thumbnail) {
+                if ($props -and $props.Thumbnail) {
                     try {
                         $streamOp = $props.Thumbnail.OpenReadAsync()
                         $stream = Await-AsyncOp $streamOp ([Windows.Storage.Streams.IRandomAccessStreamWithContentType])
@@ -230,7 +349,7 @@ while ($true) {
                 }
             }
 
-            $isPlaying = ($playback.PlaybackStatus -eq [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionPlaybackStatus]::Playing)
+            $isPlaying = ($playback -and $playback.PlaybackStatus -eq [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionPlaybackStatus]::Playing)
             
             # Gerçek zamanlı akıcı süre çubuğu hesabı
             $curSec = if ($timeline) {
@@ -258,6 +377,11 @@ while ($true) {
                 currentTime = $curSec
                 duration = $durSec
                 volume = [int]$curVol
+                sourceApp = $activeApp
+                sessions = $sessionsInfo
+                activeSessionIndex = $resolvedIndex
+                totalSessions = $rawSessions.Count
+                pinnedSource = $pinnedSource
             }
             Send-JsonPayload $payload
         } else {
@@ -272,6 +396,11 @@ while ($true) {
                 currentTime = 0
                 duration = 0
                 volume = [int]$curVol
+                sourceApp = "Boşta"
+                sessions = @()
+                activeSessionIndex = 0
+                totalSessions = 0
+                pinnedSource = $pinnedSource
             }
             Send-JsonPayload $payload
         }
