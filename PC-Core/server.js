@@ -104,8 +104,24 @@ function getNetworkIps() {
 // -------------------------------------------------------------
 let lastResolvedTrack = '';
 
+function fixEncoding(str) {
+  if (!str || typeof str !== 'string') return str;
+  if (str.includes('Ã¼') || str.includes('ÅŸ') || str.includes('Ä±') || str.includes('Ã§') || str.includes('Ã¶') || str.includes('ÄŸ')) {
+    try {
+      return Buffer.from(str, 'latin1').toString('utf8');
+    } catch (_) {}
+  }
+  return str
+    .replace(/MÃ¼zik/g, 'Müzik')
+    .replace(/mÃ¼zik/g, 'müzik')
+    .replace(/BoÅŸta/g, 'Boşta')
+    .replace(/boÅŸta/g, 'boşta')
+    .replace(/OynatÄ±cÄ±/g, 'Oynatıcı')
+    .replace(/TarayÄ±cÄ±/g, 'Tarayıcı');
+}
+
 async function resolveHighResTrackInfo(title, artist) {
-  if (!title || title === 'Müzik Bekleniyor...' || title === 'Bilinmiyor') return;
+  if (!title || title.includes('Bekleniyor') || title.includes('Bilinmiyor') || title === 'Boşta') return;
   const trackKey = `${title}|${artist}`;
   if (trackKey === lastResolvedTrack) return;
   lastResolvedTrack = trackKey;
@@ -118,22 +134,9 @@ async function resolveHighResTrackInfo(title, artist) {
   let resolvedArtwork = null;
   let resolvedVideoId = null;
 
-  // 1. iTunes Search API (Müzik albümleri için ultra kaliteli 600x600 kapak)
-  try {
-    const itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=1`;
-    const itunesRes = await fetch(itunesUrl, { signal: AbortSignal.timeout(3000) });
-    if (itunesRes.ok) {
-      const itunesData = await itunesRes.json();
-      if (itunesData.results && itunesData.results.length > 0) {
-        const item = itunesData.results[0];
-        if (item.artworkUrl100) {
-          resolvedArtwork = item.artworkUrl100.replace('100x100bb', '600x600bb');
-        }
-      }
-    }
-  } catch (e) {}
-
-  // 2. YouTube Video ID Çözümleme (Telefonda doğrudan açabilsin ve YouTube kapağı)
+  // 1. YouTube Video ID Çözümleme (Telefonda "Telefonda Aç" butonu için)
+  // DİKKAT: YouTube arama sonuçları klip, vlog veya alakasız videolar olabildiği için
+  // kapak görseli olarak ASLA KULLANILMAZ! Sadece videoId alınır.
   try {
     const ytUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
     const ytRes = await fetch(ytUrl, {
@@ -145,17 +148,32 @@ async function resolveHighResTrackInfo(title, artist) {
       const match = html.match(/\/watch\?v=([a-zA-Z0-9_-]{11})/);
       if (match && match[1]) {
         resolvedVideoId = match[1];
-        if (!resolvedArtwork) {
-          resolvedArtwork = `https://i.ytimg.com/vi/${resolvedVideoId}/hqdefault.jpg`;
-        }
       }
     }
   } catch (e) {}
 
+  // 2. iTunes Search API (SADECE mevcut GSMTC kapağı yoksa resmi müzik albüm kapağı arar)
+  if (!currentState.artwork) {
+    try {
+      const itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=1`;
+      const itunesRes = await fetch(itunesUrl, { signal: AbortSignal.timeout(3000) });
+      if (itunesRes.ok) {
+        const itunesData = await itunesRes.json();
+        if (itunesData.results && itunesData.results.length > 0) {
+          const item = itunesData.results[0];
+          if (item.artworkUrl100) {
+            resolvedArtwork = item.artworkUrl100.replace('100x100bb', '600x600bb');
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
   // Eğer parça hala değişmediyse bilgileri güncelle ve yayınla
   if (currentState.title === title && currentState.artist === artist) {
     let updated = false;
-    if (resolvedArtwork) {
+    // Sadece resmi iTunes albüm kapağı bulunduysa ve hala kapak yoksa ekle
+    if (resolvedArtwork && !currentState.artwork) {
       currentState.artwork = resolvedArtwork;
       updated = true;
     }
@@ -236,11 +254,19 @@ function startWindowsMediaBridge() {
         try {
           const payload = JSON.parse(trimmed);
           if (payload.type === 'media') {
-            const trackChanged = currentState.title !== payload.title || currentState.artist !== payload.artist;
+            const cleanTitle = fixEncoding(payload.title || '').trim();
+            const cleanArtist = fixEncoding(payload.artist || '').trim();
+            const cleanSourceApp = fixEncoding(payload.sourceApp || '').trim();
+            const isWaiting = !cleanTitle || cleanTitle.includes('Bekleniyor') || cleanTitle === 'Bilinmiyor' || cleanSourceApp === 'Boşta';
+
+            const normalizedTitle = isWaiting ? 'Müzik Bekleniyor...' : cleanTitle;
+            const normalizedArtist = isWaiting ? 'YouTube Music / Spotify' : (cleanArtist || 'YouTube Music');
+
+            const trackChanged = currentState.title !== normalizedTitle || currentState.artist !== normalizedArtist;
             const sessionsChanged = currentState.activeSessionIndex !== payload.activeSessionIndex ||
                                     currentState.totalSessions !== payload.totalSessions ||
                                     currentState.pinnedSource !== payload.pinnedSource ||
-                                    currentState.sourceApp !== payload.sourceApp ||
+                                    currentState.sourceApp !== cleanSourceApp ||
                                     JSON.stringify(currentState.sessions) !== JSON.stringify(payload.sessions || []);
 
             const isChanged = trackChanged ||
@@ -251,29 +277,46 @@ function startWindowsMediaBridge() {
                               currentState.duration !== payload.duration ||
                               (payload.artwork && currentState.artwork !== payload.artwork);
 
-            currentState.title = payload.title || 'Müzik Bekleniyor...';
-            currentState.artist = payload.artist || 'YouTube Music';
-            currentState.album = payload.album || '';
-            currentState.sourceApp = payload.sourceApp || 'Medya Oynatıcı';
-            currentState.sessions = Array.isArray(payload.sessions) ? payload.sessions : [];
+            currentState.title = normalizedTitle;
+            currentState.artist = normalizedArtist;
+            currentState.album = fixEncoding(payload.album || '');
+            currentState.sourceApp = isWaiting ? 'Boşta' : (cleanSourceApp || 'Medya Oynatıcı');
+            currentState.sessions = Array.isArray(payload.sessions) ? payload.sessions.map(s => ({
+              ...s,
+              title: fixEncoding(s.title),
+              artist: fixEncoding(s.artist),
+              app: fixEncoding(s.app)
+            })) : [];
             currentState.activeSessionIndex = typeof payload.activeSessionIndex === 'number' ? payload.activeSessionIndex : 0;
             currentState.totalSessions = typeof payload.totalSessions === 'number' ? payload.totalSessions : 0;
             currentState.pinnedSource = payload.pinnedSource || 'auto';
             
-            // Eğer yeni parça geldiyse veya mevcut kapak boşsa GSMTC kapağını al
-            if (payload.artwork && (!currentState.artwork || trackChanged)) {
-              currentState.artwork = payload.artwork;
+            if (isWaiting) {
+              // Müzik çalmıyorken / boşta iken eski görseli veya rastgele kapağı kesinlikle temizle
+              currentState.artwork = '';
+              currentState.videoId = '';
+              currentState.currentTime = 0;
+              currentState.duration = 0;
+              lastResolvedTrack = '';
+            } else {
+              // Yeni parça başladıysa veya mevcut kapak boşsa GSMTC kapağını al
+              if (payload.artwork) {
+                currentState.artwork = payload.artwork;
+              } else if (trackChanged) {
+                // Şarkı geçişinde henüz GSMTC'den yeni kapak gelmediyse eski şarkının kapağını tutma
+                currentState.artwork = '';
+              }
             }
 
-            currentState.isPlaying = !!payload.isPlaying;
-            currentState.currentTime = payload.currentTime || 0;
-            currentState.duration = payload.duration || 0;
+            currentState.isPlaying = isWaiting ? false : !!payload.isPlaying;
+            currentState.currentTime = isWaiting ? 0 : (payload.currentTime || 0);
+            currentState.duration = isWaiting ? 0 : (payload.duration || 0);
             if (typeof payload.volume === 'number') {
               currentState.volume = payload.volume;
             }
 
-            // Yeni parça başladığında yüksek kaliteli görsel ve videoId çöz
-            if (trackChanged && currentState.title !== 'Müzik Bekleniyor...') {
+            // Yeni parça başladığında videoId ve gerekirse iTunes albüm kapağı çöz
+            if (trackChanged && !isWaiting) {
               resolveHighResTrackInfo(currentState.title, currentState.artist);
             }
 

@@ -1,4 +1,4 @@
-# MusicBridge - Yerel Windows Medya ve Ses Denetim Köprüsü (GSMTC & CoreAudio)
+﻿# MusicBridge - Yerel Windows Medya ve Ses Denetim Köprüsü (GSMTC & CoreAudio)
 # Eren Teknoloji - 2026
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -247,7 +247,7 @@ while ($true) {
             $sArtist = if ($sProps -and $sProps.Artist) { $sProps.Artist.Trim() } else { "" }
 
             # Anlaşılır uygulama adı tespiti
-            $sAppName = "Medya Oynatıcı"
+            $sAppName = "Medya Oynat$([char]0x0131)c$([char]0x0131)"
             if ($sAppId -like "*Spotify*") {
                 $sAppName = "Spotify"
             } elseif ($sAppId -like "*cinhimbnkkghhklpknlkffjgod*" -or $sTitle -like "*YouTube Music*" -or $sArtist -like "*YouTube Music*") {
@@ -256,7 +256,7 @@ while ($true) {
                 if ($sTitle -like "*YouTube*" -or $sArtist -like "*YouTube*" -or $sAppId -like "*agimnkijcamfeangaknmldooml*") {
                     $sAppName = "YouTube"
                 } else {
-                    $sAppName = "Web Tarayıcı"
+                    $sAppName = "Web Taray$([char]0x0131)c$([char]0x0131)"
                 }
             }
 
@@ -319,7 +319,7 @@ while ($true) {
             $title = if ($props -and $props.Title) { $props.Title.Trim() } else { "Bilinmiyor" }
             $artist = if ($props -and $props.Artist) { $props.Artist.Trim() } else { "" }
             $album = if ($props -and $props.AlbumTitle) { $props.AlbumTitle.Trim() } else { "" }
-            $activeApp = if ($sessionsInfo.Count -gt $resolvedIndex) { $sessionsInfo[$resolvedIndex].app } else { "Medya Oynatıcı" }
+            $activeApp = if ($sessionsInfo.Count -gt $resolvedIndex) { $sessionsInfo[$resolvedIndex].app } else { "Medya Oynat$([char]0x0131)c$([char]0x0131)" }
 
             # Albüm kapağı: Parça değiştiğinde veya henüz kapak yüklenemediyse tekrar dene
             $artKey = "$title|$artist"
@@ -389,7 +389,7 @@ while ($true) {
             # Oynatıcı kapalı veya duraklatılmış, ancak ses seviyesi hala aktiftir
             $payload = @{
                 type = "media"
-                title = "Müzik Bekleniyor..."
+                title = "M$([char]0x00FC)zik Bekleniyor..."
                 artist = "YouTube Music / Spotify"
                 album = ""
                 artwork = ""
@@ -397,7 +397,7 @@ while ($true) {
                 currentTime = 0
                 duration = 0
                 volume = [int]$curVol
-                sourceApp = "Boşta"
+                sourceApp = "Bo$([char]0x015F)ta"
                 sessions = @()
                 activeSessionIndex = 0
                 totalSessions = 0

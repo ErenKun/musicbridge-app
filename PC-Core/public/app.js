@@ -8,6 +8,19 @@ let lastSyncTimestamp = performance.now();
 let isSeeking = false;
 let seekTimeout = null;
 
+const DEFAULT_ARTWORK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24'%3E%3Cpath fill='%236366f1' d='M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z'/%3E%3C/svg%3E";
+
+function sanitizeTurkish(str) {
+  if (!str || typeof str !== 'string') return str;
+  return str
+    .replace(/MÃ¼zik/g, 'Müzik')
+    .replace(/mÃ¼zik/g, 'müzik')
+    .replace(/BoÅŸta/g, 'Boşta')
+    .replace(/boÅŸta/g, 'boşta')
+    .replace(/OynatÄ±cÄ±/g, 'Oynatıcı')
+    .replace(/TarayÄ±cÄ±/g, 'Tarayıcı');
+}
+
 let currentTrack = {
   title: 'Müzik Bekleniyor...',
   artist: 'YouTube Music',
@@ -266,6 +279,16 @@ function updateUI(data) {
   const { currentTime: _, ...restData } = data;
   currentTrack = { ...currentTrack, ...restData };
 
+  currentTrack.title = sanitizeTurkish(currentTrack.title);
+  currentTrack.artist = sanitizeTurkish(currentTrack.artist);
+  currentTrack.sourceApp = sanitizeTurkish(currentTrack.sourceApp);
+
+  const isWaitingTrack = !currentTrack.title || currentTrack.title.includes('Bekleniyor') || currentTrack.sourceApp === 'Boşta';
+  if (isWaitingTrack) {
+    currentTrack.artwork = '';
+    currentTrack.videoId = '';
+  }
+
   // Şarkı başlığı ve sanatçı (Akıllı Kayan Yazı)
   const titleEl = document.getElementById('track-title');
   const artistEl = document.getElementById('track-artist');
@@ -281,11 +304,14 @@ function updateUI(data) {
     setupMarquee('artist-marquee-container', artistEl);
   }
 
-  // Albüm Kapağı (Yüksek Kaliteli veya Standart)
-  if (currentTrack.artwork) {
-    const artImg = document.getElementById('track-art');
-    if (artImg.src !== currentTrack.artwork) {
-      artImg.src = currentTrack.artwork;
+  // Albüm Kapağı (Yüksek Kaliteli veya Temiz Placeholder)
+  const artImg = document.getElementById('track-art');
+  if (artImg) {
+    const targetArt = (currentTrack.artwork && currentTrack.artwork.trim() && !isWaitingTrack)
+      ? currentTrack.artwork
+      : DEFAULT_ARTWORK;
+    if (artImg.src !== targetArt) {
+      artImg.src = targetArt;
     }
   }
 
@@ -629,11 +655,12 @@ async function toggleStartup(enable) {
 // -------------------------------------------------------------
 function getSourceIcon(app) {
   if (!app) return '🎵';
-  const lower = app.toLowerCase();
+  const lower = sanitizeTurkish(app).toLowerCase();
+  if (lower.includes('boşta') || lower.includes('bosta')) return '💤';
   if (lower.includes('youtube music')) return '🎵';
   if (lower.includes('youtube')) return '▶️';
   if (lower.includes('spotify')) return '🎧';
-  if (lower.includes('tarayıcı') || lower.includes('chrome') || lower.includes('edge') || lower.includes('brave') || lower.includes('browser')) return '🌐';
+  if (lower.includes('tarayıcı') || lower.includes('tarayici') || lower.includes('chrome') || lower.includes('edge') || lower.includes('brave') || lower.includes('browser')) return '🌐';
   return '📻';
 }
 
@@ -645,7 +672,7 @@ function updateSessionUI() {
   const prevBtn = document.getElementById('prev-session-btn');
   const nextBtn = document.getElementById('next-session-btn');
 
-  const sourceApp = currentTrack.sourceApp || 'Medya Oynatıcı';
+  const sourceApp = sanitizeTurkish(currentTrack.sourceApp || 'Medya Oynatıcı');
   if (iconEl) iconEl.innerText = getSourceIcon(sourceApp);
   if (nameEl) nameEl.innerText = sourceApp;
 
@@ -706,8 +733,8 @@ function renderSessionsList() {
       <button class="${activeClass}" onclick="selectSession(${s.id})">
         <span class="item-icon">${sIcon}</span>
         <div class="item-text">
-          <span class="item-title">${escapeHtml(s.title || 'Bilinmiyor')}</span>
-          <span class="item-sub">${escapeHtml(s.artist || s.app)}</span>
+          <span class="item-title">${escapeHtml(sanitizeTurkish(s.title || 'Bilinmiyor'))}</span>
+          <span class="item-sub">${escapeHtml(sanitizeTurkish(s.artist || s.app))}</span>
         </div>
         <span class="${badgeClass}">${badgeText}</span>
         <span class="item-check">✓</span>
