@@ -170,16 +170,9 @@ while ($true) {
                     if ($action -eq "playPause") {
                         Await-AsyncOp ($curSession.TryTogglePlayPauseAsync()) ([bool]) | Out-Null
                     } elseif ($action -eq "play") {
-                        # Chrome ve bazı tarayıcılarda TryPlayAsync başarısız olursa TryTogglePlayPauseAsync dene
-                        $playOk = Await-AsyncOp ($curSession.TryPlayAsync()) ([bool])
-                        if (-not $playOk) {
-                            Await-AsyncOp ($curSession.TryTogglePlayPauseAsync()) ([bool]) | Out-Null
-                        }
+                        Await-AsyncOp ($curSession.TryPlayAsync()) ([bool]) | Out-Null
                     } elseif ($action -eq "pause") {
-                        $pauseOk = Await-AsyncOp ($curSession.TryPauseAsync()) ([bool])
-                        if (-not $pauseOk) {
-                            Await-AsyncOp ($curSession.TryTogglePlayPauseAsync()) ([bool]) | Out-Null
-                        }
+                        Await-AsyncOp ($curSession.TryPauseAsync()) ([bool]) | Out-Null
                     } elseif ($action -eq "next") {
                         Await-AsyncOp ($curSession.TrySkipNextAsync()) ([bool]) | Out-Null
                     } elseif ($action -eq "previous") {

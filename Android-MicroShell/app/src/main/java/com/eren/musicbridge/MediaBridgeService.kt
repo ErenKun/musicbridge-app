@@ -12,6 +12,7 @@ import android.os.PowerManager
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
+import android.view.KeyEvent
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -43,6 +44,14 @@ class MediaBridgeService : Service() {
         const val PREFS_NAME = "MusicBridgePrefs"
         const val KEY_SERVER_URL = "server_url"
         var instance: MediaBridgeService? = null
+
+        // Huawei Watch ve tum akilli saatlerin destekledigi tam eylem listesi
+        const val SUPPORTED_ACTIONS = PlaybackStateCompat.ACTION_PLAY or
+                PlaybackStateCompat.ACTION_PAUSE or
+                PlaybackStateCompat.ACTION_PLAY_PAUSE or
+                PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
+                PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
+                PlaybackStateCompat.ACTION_STOP
     }
 
     override fun onCreate() {
@@ -80,13 +89,12 @@ class MediaBridgeService : Service() {
 
             setCallback(object : MediaSessionCompat.Callback() {
                 override fun onPlay() {
-                    // Saatte aninda tepki icin oynatma durumunu hemen guncelle
-                    setOptimisticPlaybackState(true)
+                    updatePlaybackStateOnly(true)
                     sendMediaCommandToPc("play")
                 }
 
                 override fun onPause() {
-                    setOptimisticPlaybackState(false)
+                    updatePlaybackStateOnly(false)
                     sendMediaCommandToPc("pause")
                 }
 
@@ -99,31 +107,79 @@ class MediaBridgeService : Service() {
                 }
 
                 override fun onStop() {
-                    setOptimisticPlaybackState(false)
+                    updatePlaybackStateOnly(false)
                     sendMediaCommandToPc("pause")
                 }
+
+                override fun onMediaButtonEvent(mediaButtonEvent: Intent?): Boolean {
+                    val keyEvent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        mediaButtonEvent?.getParcelableExtra(Intent.EXTRA_KEY_EVENT, KeyEvent::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        mediaButtonEvent?.getParcelableExtra(Intent.EXTRA_KEY_EVENT)
+                    }
+                    if (keyEvent != null && keyEvent.action == KeyEvent.ACTION_DOWN) {
+                        when (keyEvent.keyCode) {
+                            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+                            KeyEvent.KEYCODE_HEADSETHOOK -> {
+                                val nextState = !lastIsPlaying
+                                updatePlaybackStateOnly(nextState)
+                                sendMediaCommandToPc(if (nextState) "play" else "pause")
+                                return true
+                            }
+                            KeyEvent.KEYCODE_MEDIA_PLAY -> {
+                                updatePlaybackStateOnly(true)
+                                sendMediaCommandToPc("play")
+                                return true
+                            }
+                            KeyEvent.KEYCODE_MEDIA_PAUSE -> {
+                                updatePlaybackStateOnly(false)
+                                sendMediaCommandToPc("pause")
+                                return true
+                            }
+                            KeyEvent.KEYCODE_MEDIA_NEXT -> {
+                                sendMediaCommandToPc("next")
+                                return true
+                            }
+                            KeyEvent.KEYCODE_MEDIA_PREVIOUS -> {
+                                sendMediaCommandToPc("previous")
+                                return true
+                            }
+                        }
+                    }
+                    return super.onMediaButtonEvent(mediaButtonEvent)
+                }
             })
+
+            // Saatin baslangicta "telefonda sarki yok" demesini onleyen gecerli baslangic durumu
+            val initialMetadata = MediaMetadataCompat.Builder()
+                .putString(MediaMetadataCompat.METADATA_KEY_TITLE, "MusicBridge")
+                .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, "Hazır")
+                .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, 1000L)
+                .build()
+            setMetadata(initialMetadata)
+
+            val initialState = PlaybackStateCompat.Builder()
+                .setActions(SUPPORTED_ACTIONS)
+                .setState(PlaybackStateCompat.STATE_PAUSED, 0L, 1.0f)
+                .build()
+            setPlaybackState(initialState)
 
             isActive = true
         }
     }
 
-    private fun setOptimisticPlaybackState(isPlaying: Boolean) {
+    private fun updatePlaybackStateOnly(isPlaying: Boolean) {
+        lastIsPlaying = isPlaying
         val state = PlaybackStateCompat.Builder()
-            .setActions(
-                PlaybackStateCompat.ACTION_PLAY or
-                PlaybackStateCompat.ACTION_PAUSE or
-                PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
-                PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS
-            )
+            .setActions(SUPPORTED_ACTIONS)
             .setState(
                 if (isPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED,
-                PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN,
+                0L,
                 1.0f
             )
             .build()
         mediaSession.setPlaybackState(state)
-        lastIsPlaying = isPlaying
     }
 
     /**
@@ -138,21 +194,16 @@ class MediaBridgeService : Service() {
         val metadata = MediaMetadataCompat.Builder()
             .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
             .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, artist)
-            .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, durationMs)
+            .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, if (durationMs > 0) durationMs else 1000L)
             .build()
         mediaSession.setMetadata(metadata)
 
-        // 2. Playback State
+        // 2. Playback State (Huawei Watch icin daima 0L veya gecerli pozisyon, asla -1 verilmez)
         val state = PlaybackStateCompat.Builder()
-            .setActions(
-                PlaybackStateCompat.ACTION_PLAY or
-                PlaybackStateCompat.ACTION_PAUSE or
-                PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
-                PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS
-            )
+            .setActions(SUPPORTED_ACTIONS)
             .setState(
                 if (isPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED,
-                PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN,
+                0L,
                 1.0f
             )
             .build()
@@ -185,7 +236,7 @@ class MediaBridgeService : Service() {
                 "MusicBridge:MediaCommandWakeLock"
             )
             try {
-                wakeLock?.acquire(3000) // 3 saniye guvenlik limiti (pil tuketmez)
+                wakeLock?.acquire(3000)
                 val url = URL("$serverBaseUrl/api/control")
                 val conn = url.openConnection() as HttpURLConnection
                 conn.requestMethod = "POST"
@@ -228,7 +279,7 @@ class MediaBridgeService : Service() {
                         val json = JSONObject(responseText)
                         val media = json.optJSONObject("media")
                         if (media != null) {
-                            val title = media.optString("title", "Muzik Bekleniyor...")
+                            val title = media.optString("title", "MusicBridge")
                             val artist = media.optString("artist", "YouTube Music")
                             val duration = media.optLong("duration", 0L) * 1000L
                             val isPlaying = media.optBoolean("isPlaying", false)
@@ -243,8 +294,8 @@ class MediaBridgeService : Service() {
                     // PC kapaliysa veya ag yoksa
                 }
 
-                // Muzik caliyorsa 2.5 sn, calmiyorsa 5 sn bekle (Sifira yakin pil kullanimi)
-                delay(if (lastIsPlaying) 2500L else 5000L)
+                // Muzik caliyorsa 2 sn, calmiyorsa 4 sn bekle (Sifira yakin pil kullanimi)
+                delay(if (lastIsPlaying) 2000L else 4000L)
             }
         }
     }
