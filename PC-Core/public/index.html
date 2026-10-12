@@ -14,11 +14,14 @@
         <span class="logo-dot"></span>
         <a href="https://linktr.ee/erennkun" target="_blank" style="text-decoration: none; color: inherit;"><span class="brand-title">MusicBridge</span></a>
       </div>
-      <div class="connection-status" id="conn-badge">
+      <div class="connection-status" id="conn-badge" onclick="switchView('network-view')">
         <span class="status-indicator"></span>
         <span id="conn-text">Bağlanıyor...</span>
       </div>
     </header>
+
+    <!-- Bildirim Balonu (Toast) -->
+    <div id="toast" class="toast"></div>
 
     <!-- Sekme Başlıkları -->
     <nav class="nav-tabs">
@@ -77,7 +80,7 @@
       <div class="newpipe-card">
         <div class="newpipe-info">
           <span class="newpipe-title">NewPipe'ta Devam Et</span>
-          <span class="newpipe-desc">Şarkıyı telefonunda tam kaldığı saniyeden aç</span>
+          <span class="newpipe-desc">Şarkıyı telefonda tam kaldığı saniyeden NewPipe ile aç</span>
         </div>
         <button class="btn-newpipe" onclick="triggerNewPipeResume()">
           <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
@@ -89,24 +92,34 @@
     <!-- GÖRÜNÜM 2: KUYRUK / SIRADAKİLER -->
     <section id="queue-view" class="view">
       <div class="queue-header">
-        <h3>Sıradaki Parçalar</h3>
-        <span class="queue-count" id="queue-count">0 Parça</span>
+        <div>
+          <h3>Sıradaki Parçalar</h3>
+          <span class="queue-badge" id="queue-type-badge">Otomatik</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="queue-count" id="queue-count">0 Parça</span>
+          <button class="btn-icon" onclick="fetchStatus()" title="Yenile">🔄</button>
+        </div>
       </div>
       <div class="queue-list" id="queue-list">
-        <p class="empty-state">Kuyruk bilgisi bulunamadı veya oynatıcı kapalı.</p>
+        <p class="empty-state">Kuyruk bilgisi yükleniyor...</p>
       </div>
     </section>
 
-    <!-- GÖRÜNÜM 3: BAĞLANTI & TAILSCALE -->
+    <!-- GÖRÜNÜM 3: BAĞLANTI & AYARLAR -->
     <section id="network-view" class="view">
+      <!-- Durum Kartı -->
       <div class="net-card">
-        <h3>Ağ & Cihaz Durumu</h3>
+        <div class="card-title-row">
+          <h3>Ağ & Cihaz Durumu</h3>
+          <span class="ping-badge" id="ping-badge">-- ms</span>
+        </div>
         <div class="net-row">
-          <span>Sunucu:</span>
+          <span>Sunucu Adresi:</span>
           <strong id="net-host">Tespit ediliyor...</strong>
         </div>
         <div class="net-row">
-          <span>Tailscale:</span>
+          <span>Tailscale IP:</span>
           <strong id="net-tailscale">Kontrol ediliyor...</strong>
         </div>
         <div class="net-row">
@@ -114,15 +127,51 @@
           <strong class="text-emerald">Hazır (MediaSession)</strong>
         </div>
       </div>
-      <div style="margin-bottom: 16px;">
-        <a href="/MusicBridge.apk" download style="display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px; background: #6366f1; color: white; border-radius: 14px; text-decoration: none; font-weight: 700; font-size: 0.85rem;">
-          📲 MusicBridge APK İndir (3 MB)
-        </a>
+
+      <!-- Hızlı Bağlantı Değiştirme Butonları -->
+      <div class="net-card">
+        <h3>Hızlı Bağlantı Seçimi</h3>
+        <p class="help-text" style="margin-bottom: 10px;">Bulunduğunuz ağa göre tek dokunuşla geçiş yapın:</p>
+        <div class="quick-ips" id="quick-ips-container">
+          <!-- Dinamik olarak Wi-Fi ve Tailscale butonları doldurulur -->
+        </div>
       </div>
-      <p class="help-text">
-        Bu ekran doğrudan PC'den servis edilmektedir. PC'de yapılan arayüz değişiklikleri sayfayı yenileyince anında yansır.
-      </p>
-      <div style="margin-top: 20px; text-align: center;">
+
+      <!-- Manuel Bağlantı Güncelleme Formu -->
+      <div class="net-card">
+        <h3>Sunucu Adresini Güncelle</h3>
+        <p class="help-text" style="margin-bottom: 10px;">Telefonun veya tarayıcının bağlanacağı PC IP adresini özelleştirin:</p>
+        <div class="input-group">
+          <input type="text" id="custom-ip-input" placeholder="Örn: 192.168.1.42:8765 veya 100.x.x.x:8765">
+          <button class="btn-primary" onclick="applyCustomServerIp()">Bağlan</button>
+        </div>
+        <div id="ip-test-feedback" class="feedback-text"></div>
+      </div>
+
+      <!-- PC Başlangıç & Arka Plan Yönetimi -->
+      <div class="net-card">
+        <h3>PC Arka Plan & Başlangıç</h3>
+        <div class="toggle-row">
+          <div>
+            <div style="font-weight: 600; font-size: 0.9rem;">Windows Başlangıçta Çalıştır</div>
+            <div class="help-text">PC açıldığında MusicBridge arka planda gizlice başlar</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="startup-toggle" onchange="toggleStartup(this.checked)">
+            <span class="slider round"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Tailscale Rehberi -->
+      <div class="net-card">
+        <h3>🌐 Tailscale ile Her Yerden Erişim</h3>
+        <p class="help-text">
+          Tailscale VPN sayesinde evde olmasanız bile, mobil veri (4.5G/5G) üzerinden bilgisayarınızdaki müziği kesintisiz yönetebilirsiniz. PC ve telefonunuzda Tailscale açık olduğunda 100.x.x.x IP'siyle anında bağlanırsınız.
+        </p>
+      </div>
+
+      <div style="margin-top: 10px; text-align: center;">
         <a href="https://linktr.ee/erennkun" target="_blank" style="color: #6366f1; text-decoration: none; font-size: 0.75rem; font-weight: 600;">
           🌐 Eren Teknoloji Ekosistemi & Biyografi ➔
         </a>

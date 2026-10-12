@@ -395,3 +395,214 @@ body {
   color: var(--text-muted);
   line-height: 1.5;
 }
+
+/* Card Titles & Badges */
+.card-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ping-badge {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border-radius: 8px;
+  font-family: monospace;
+}
+
+.queue-badge {
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  background: rgba(99, 102, 241, 0.2);
+  color: #818cf8;
+  border-radius: 6px;
+  font-weight: 600;
+  margin-top: 2px;
+  display: inline-block;
+}
+
+.btn-icon {
+  background: none;
+  border: none;
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  transition: transform 0.2s;
+}
+
+.btn-icon:active {
+  transform: scale(0.9);
+}
+
+/* Quick IP Buttons */
+.quick-ips {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ip-pill-btn {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text-main);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ip-pill-btn:hover {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: var(--accent);
+}
+
+.ip-pill-btn.active {
+  background: rgba(99, 102, 241, 0.25);
+  border-color: var(--accent);
+}
+
+.ip-pill-label {
+  font-weight: 600;
+}
+
+.ip-pill-val {
+  font-family: monospace;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+/* Input Group */
+.input-group {
+  display: flex;
+  gap: 8px;
+}
+
+.input-group input {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  color: var(--text-main);
+  font-size: 0.8rem;
+  font-family: monospace;
+  outline: none;
+}
+
+.input-group input:focus {
+  border-color: var(--accent);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.feedback-text {
+  font-size: 0.75rem;
+  margin-top: 6px;
+  min-height: 16px;
+}
+
+.feedback-text.success {
+  color: #10b981;
+}
+
+.feedback-text.error {
+  color: #ef4444;
+}
+
+/* Toggle Switch */
+.toggle-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #334155;
+  transition: .3s;
+  border-radius: 24px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .3s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: var(--accent);
+}
+
+input:checked + .slider:before {
+  transform: translateX(20px);
+}
+
+/* Toast Message */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background: #1e293b;
+  color: white;
+  padding: 10px 18px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  border: 1px solid rgba(255,255,255,0.1);
+  pointer-events: none;
+  opacity: 0;
+  transition: all 0.3s ease;
+  z-index: 9999;
+}
+
+.toast.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}

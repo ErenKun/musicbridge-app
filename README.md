@@ -71,33 +71,27 @@ Geleneksel uzaktan kumanda araçlarının aksine, **saatinize harici hiçbir uyg
 
 ---
 
-## 🚀 2 Dakikada Hızlı Kurulum
+## 🚀 Hızlı Başlatma ve Kullanım Seçenekleri
 
 ### 1. Bilgisayarda Başlatma (Windows)
-1. Bu depoyu indirin veya klonlayın.
-2. `PC-Core` klasöründeki **`start.bat`** dosyasına çift tıklayın.
-3. Konsol ekranında yerel IP adresiniz hazır olacaktır:
-   ```text
-   =============================================================
-   🎵 MusicBridge PC Core - Eren Teknoloji Aktif!
-   =============================================================
-   📡 Yerel Ağ (Ev Wi-Fi) Adresi  : http://192.168.1.42:8765
-   🌐 Tailscale Adresi           : http://100.85.12.34:8765 (Varsa)
-   =============================================================
-   ```
+`PC-Core` klasöründe ihtiyacınıza göre 3 farklı çalıştırma seçeneği mevcuttur:
 
-### 2. Telefona Yükleme (Kablosuz & Zahmetsiz)
+* **Sessiz Arka Plan (Sıfır Açık Pencere):**
+  * **`MusicBridge-ArkaPlanda-Baslat.vbs`** dosyasına çift tıklayın. Hiçbir konsol veya siyah pencere açılmadan doğrudan arka planda gizlice çalışır.
+* **Windows Başlangıçta Otomatik Başlatma:**
+  * **`Baslangicta-Calistir-Kur.bat`** dosyasına çift tıklayın veya Web Arayüzündeki "Windows Başlangıçta Çalıştır" anahtarını açın. PC her açıldığında arka planda otomatik başlar.
+* **Bildirim Alanı (System Tray):**
+  * **`MusicBridge-Tray.vbs`** dosyasına çift tıklayın. Görev çubuğunun sağ altındaki sistem tepsisinde simge belirir; sağ tıklayarak web arayüzünü açabilir, IP kopyalayabilir ve sunucuyu kapatabilirsiniz.
+* **Geliştirici Konsolu (Canlı Loglar):**
+  * **`start.bat`** ile canlı konsol çıktısıyla başlatabilirsiniz.
+* **Durdurmak İçin:**
+  * **`MusicBridge-Durdur.bat`** dosyasını çalıştırarak tüm arka plan süreçlerini anında kapatabilirsiniz.
 
-Kablo bağlamanıza gerek yok! Bilgisayarınızda `start.bat` açıkken:
-1. Telefonunuzun tarayıcısını (Chrome vb.) açın ve şu adrese gidin:
-   ```text
-   http://<BILGISAYAR-IP-ADRESINIZ>:8765/MusicBridge.apk
-   ```
-   *(Örnek: `http://192.168.1.42:8765/MusicBridge.apk`)*
-2. İndirilen **3 MB'lık** uygulamayı kurun.
-3. Uygulamayı açıp bilgisayarınızın ekranda yazan IP adresini girin ve **Bağlan** deyin.
+### 2. Telefonda Kullanım
 
-> 💡 **Alternatif:** APK dosyasını doğrudan bu GitHub deposunun **Releases / Actions** sekmesinden de telefonunuza indirebilirsiniz.
+1. Telefonunuzun tarayıcısından veya **MusicBridge Android** uygulamasından PC'nin adresine bağlanın (`http://192.168.1.x:8765` veya Tailscale `100.x.x.x:8765`).
+2. **Bağlantı sekmesinden** Wi-Fi ve Tailscale arasında tek dokunuşla geçiş yapabilir, IP adresini doğrudan arayüzden güncelleyebilirsiniz.
+3. Masadan kalktığınızda **"Telefonda Aç"** butonuna dokunarak NewPipe ile kaldığı saniyeden dinlemeye devam edin.
 
 ---
 

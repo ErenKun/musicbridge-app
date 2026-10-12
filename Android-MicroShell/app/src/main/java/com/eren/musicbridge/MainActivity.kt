@@ -24,7 +24,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Arka Plan Servisini Başlat (Huawei Saat & Kilit Ekranı)
+        // Arka Plan Servisini Baslat (Huawei Saat & Kilit Ekrani)
         val serviceIntent = Intent(this, MediaBridgeService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(serviceIntent)
@@ -40,16 +40,16 @@ class MainActivity : AppCompatActivity() {
             settings.useWideViewPort = true
             settings.cacheMode = WebSettings.LOAD_DEFAULT
 
-            // Donanım Hızlandırma
+            // Donanim Hizlandirma
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
 
-            // Web ile Kotlin Köprüsü
+            // Web ile Kotlin Koprusu
             addJavascriptInterface(ErenBridge(this@MainActivity), "ErenBridge")
 
             webViewClient = WebViewClient()
             webChromeClient = WebChromeClient()
 
-            // Uzun basıldığında IP değiştirme menüsü
+            // Uzun basildiginda acil durum IP degistirme menusu
             setOnLongClickListener {
                 showServerConfigDialog()
                 true
@@ -58,7 +58,7 @@ class MainActivity : AppCompatActivity() {
 
         setContentView(webView)
 
-        // Kayıtlı Sunucu Adresini Kontrol Et
+        // Kayitli Sunucu Adresini Kontrol Et
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val savedUrl = prefs.getString(KEY_SERVER_URL, "")
 
@@ -80,6 +80,27 @@ class MainActivity : AppCompatActivity() {
         webView.loadUrl(formattedUrl)
     }
 
+    /**
+     * Web arayuzundeki Baglanti sekmesinden IP degistirildiginde cagrilir.
+     */
+    fun onServerUrlChangedFromWeb(newUrl: String) {
+        val cleanUrl = newUrl.trim()
+        if (cleanUrl.isNotBlank()) {
+            val formattedUrl = if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
+                "http://$cleanUrl"
+            } else {
+                cleanUrl
+            }
+            getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putString(KEY_SERVER_URL, formattedUrl)
+                .apply()
+
+            MediaBridgeService.instance?.setServerUrl(formattedUrl)
+            webView.loadUrl(formattedUrl)
+        }
+    }
+
     private fun showServerConfigDialog() {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val currentUrl = prefs.getString(KEY_SERVER_URL, "192.168.1.42:8765")
@@ -91,10 +112,10 @@ class MainActivity : AppCompatActivity() {
         }
 
         AlertDialog.Builder(this)
-            .setTitle("MusicBridge PC Bağlantısı")
-            .setMessage("Bilgisayarınızın yerel Wi-Fi veya Tailscale IP adresini girin:")
+            .setTitle("MusicBridge PC Baglantisi")
+            .setMessage("Bilgisayarinizin yerel Wi-Fi veya Tailscale IP adresini girin:")
             .setView(input)
-            .setPositiveButton("Bağlan") { _, _ ->
+            .setPositiveButton("Baglan") { _, _ ->
                 val newUrl = input.text.toString().trim()
                 if (newUrl.isNotBlank()) {
                     prefs.edit().putString(KEY_SERVER_URL, newUrl).apply()
@@ -109,7 +130,7 @@ class MainActivity : AppCompatActivity() {
         if (webView.canGoBack()) {
             webView.goBack()
         } else {
-            // Uygulamayı tamamen kapatmak yerine arka plana at (Müzik & Saat kesilmesin)
+            // Uygulamayi tamamen kapatmak yerine arka plana at (Muzik & Saat kesilmesin)
             moveTaskToBack(true)
         }
     }
