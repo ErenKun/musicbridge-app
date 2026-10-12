@@ -353,8 +353,9 @@ while ($true) {
             
             # Gerçek zamanlı akıcı süre çubuğu hesabı
             $curSec = if ($timeline) {
-                if ($isPlaying -and $timeline.LastUpdatedTime) {
+                if ($isPlaying -and $timeline.LastUpdatedTime -and $timeline.LastUpdatedTime.Year -gt 2020) {
                     $diff = ([DateTimeOffset]::UtcNow - $timeline.LastUpdatedTime.ToUniversalTime()).TotalSeconds
+                    if ($diff -lt 0 -or $diff -gt 86400) { $diff = 0 }
                     $pos = $timeline.Position.TotalSeconds + $diff
                     if ($timeline.EndTime -and $pos -gt $timeline.EndTime.TotalSeconds) {
                         $pos = $timeline.EndTime.TotalSeconds

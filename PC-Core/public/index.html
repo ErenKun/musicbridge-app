@@ -10,9 +10,9 @@
   <div class="app-container">
     <!-- Üst Başlık & Durum -->
     <header class="header">
-      <div class="brand">
+      <div class="brand" onclick="openAboutModal()" style="cursor: pointer;" title="MusicBridge Hakkında & Afiş">
         <span class="logo-dot"></span>
-        <a href="https://linktr.ee/erennkun" target="_blank" style="text-decoration: none; color: inherit;"><span class="brand-title">MusicBridge</span></a>
+        <span class="brand-title">MusicBridge</span>
       </div>
       <div class="connection-status" id="conn-badge" onclick="switchView('network-view')">
         <span class="status-indicator"></span>
@@ -93,10 +93,14 @@
         </div>
       </div>
 
-      <!-- Şarkı Bilgisi -->
+      <!-- Şarkı Bilgisi (Akıllı Kayan Yazı) -->
       <div class="track-details">
-        <h2 id="track-title" class="track-title">Müzik Bekleniyor...</h2>
-        <p id="track-artist" class="track-artist">YouTube Music</p>
+        <div class="marquee-container" id="title-marquee-container">
+          <h2 id="track-title" class="track-title">Müzik Bekleniyor...</h2>
+        </div>
+        <div class="marquee-container" id="artist-marquee-container">
+          <p id="track-artist" class="track-artist">YouTube Music</p>
+        </div>
       </div>
 
       <!-- İlerleme Çubuğu -->
@@ -225,12 +229,65 @@
         </p>
       </div>
 
-      <div style="margin-top: 10px; text-align: center;">
-        <a href="https://linktr.ee/erennkun" target="_blank" style="color: #6366f1; text-decoration: none; font-size: 0.75rem; font-weight: 600;">
-          🌐 Eren Teknoloji Ekosistemi & Biyografi ➔
+      <div style="margin-top: 14px; text-align: center;">
+        <a href="https://linktr.ee/erennkun" target="_blank" class="footer-brand-btn">
+          <span>🌐 Eren Teknoloji ➔</span>
         </a>
       </div>
     </section>
+
+    <!-- HAKKINDA & AFİŞ MODAL (AŞAĞIDAN YUKARIYA AKICI AÇILAN KART) -->
+    <div id="about-modal" class="about-modal-overlay" onclick="closeAboutModal(event)">
+      <div class="about-modal-card" onclick="event.stopPropagation()">
+        <div class="about-modal-handle"></div>
+        <div class="about-banner">
+          <div class="about-logo-badge">
+            <span class="logo-pulse"></span>
+            <span class="about-icon">🟣</span>
+          </div>
+          <h2 class="about-app-title">MusicBridge</h2>
+          <span class="about-badge">Eren Teknoloji • v2.0</span>
+          <p class="about-desc">
+            PC'deki tüm müzik ve videoları sıfır gecikmeyle telefonunuzdan ve Huawei / WearOS akıllı saatinizden yöneten evrensel medya ekosistemi.
+          </p>
+        </div>
+
+        <div class="about-features">
+          <div class="about-feat-item">
+            <span class="feat-emoji">🎛️</span>
+            <div>
+              <strong>Windows GSMTC Çoklu Oturum</strong>
+              <p>YouTube Music, Spotify ve video sekmeleri arasında anında geçiş & kaynak sabitleme.</p>
+            </div>
+          </div>
+          <div class="about-feat-item">
+            <span class="feat-emoji">⌚</span>
+            <div>
+              <strong>Huawei Watch & Akıllı Saat</strong>
+              <p>Bileğinizden parça ismi, akıcı süre ve gecikmesiz durdur/başlat uzaktan kontrolü.</p>
+            </div>
+          </div>
+          <div class="about-feat-item">
+            <span class="feat-emoji">📱</span>
+            <div>
+              <strong>NewPipe Kesintisiz Devam</strong>
+              <p>PC'de dinlediğiniz parçayı telefonda kaldığınız saniyeden NewPipe ile anında açma.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="about-links">
+          <a href="https://linktr.ee/erennkun" target="_blank" class="about-btn primary">
+            <span>🌐 Eren Teknoloji</span>
+          </a>
+          <a href="https://github.com/ErenKun/musicbridge-app" target="_blank" class="about-btn secondary">
+            <span>⭐ GitHub Projesi</span>
+          </a>
+        </div>
+
+        <button class="about-close-btn" onclick="closeAboutModal()" title="Kapat">✕</button>
+      </div>
+    </div>
   </div>
 
   <script src="app.js"></script>

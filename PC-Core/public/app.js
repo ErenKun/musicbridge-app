@@ -3,6 +3,10 @@ let isUserInteractingWithVolume = false;
 let volTimeout = null;
 let progressTimer = null;
 let lastPingTime = 0;
+let lastServerSyncSec = 0;
+let lastSyncTimestamp = performance.now();
+let isSeeking = false;
+let seekTimeout = null;
 
 let currentTrack = {
   title: 'Müzik Bekleniyor...',
@@ -97,21 +101,23 @@ function updateConnBadge(isOnline) {
   }
 }
 
-// Akıcı İlerleme Çubuğu Zamanlayıcısı (Süre Çubuğunun Donmasını Kesin Olarak Önler)
+// Akıcı ve Kesintisiz İlerleme Çubuğu Motoru (Geri Sıçrama ve Donmaları Tamamen Önler)
 function startProgressTimer() {
   if (progressTimer) clearInterval(progressTimer);
   progressTimer = setInterval(() => {
-    if (currentTrack.isPlaying && currentTrack.duration > 0) {
-      if (currentTrack.currentTime < currentTrack.duration) {
-        currentTrack.currentTime += 1;
-        updateProgressDisplay();
-      }
+    if (currentTrack.isPlaying && currentTrack.duration > 0 && !isSeeking) {
+      const now = performance.now();
+      const elapsed = (now - lastSyncTimestamp) / 1000;
+      const smoothTime = Math.min(currentTrack.duration, lastServerSyncSec + elapsed);
+      currentTrack.currentTime = smoothTime;
+      updateProgressDisplay();
     }
-  }, 1000);
+  }, 250);
 }
 
 function updateProgressDisplay() {
-  document.getElementById('curr-time').innerText = formatTime(currentTrack.currentTime);
+  const displaySec = Math.floor(currentTrack.currentTime || 0);
+  document.getElementById('curr-time').innerText = formatTime(displaySec);
   document.getElementById('total-time').innerText = formatTime(currentTrack.duration);
 
   if (currentTrack.duration > 0) {
@@ -126,10 +132,54 @@ function updateProgressDisplay() {
 function updateUI(data) {
   if (!data) return;
   const isPlayingChanged = currentTrack.isPlaying !== data.isPlaying;
-  currentTrack = { ...currentTrack, ...data };
+  const trackChanged = (currentTrack.title !== data.title) || (currentTrack.artist !== data.artist);
 
-  document.getElementById('track-title').innerText = currentTrack.title || 'Müzik Bekleniyor...';
-  document.getElementById('track-artist').innerText = currentTrack.artist || 'YouTube Music';
+  // Gelen sunucu süresini akıllıca filtrele (Geri sıçrama ve jitter koruması)
+  const incomingSec = (typeof data.currentTime === 'number') ? data.currentTime : 0;
+  
+  if (trackChanged) {
+    // Parça değiştiyse süreyi sıfırla veya gelen değere anında kitle
+    currentTrack.currentTime = incomingSec;
+    lastServerSyncSec = incomingSec;
+    lastSyncTimestamp = performance.now();
+  } else if (!isSeeking) {
+    const currentEstimated = lastServerSyncSec + ((performance.now() - lastSyncTimestamp) / 1000);
+    const diff = incomingSec - currentEstimated;
+
+    // Eğer fark 4 saniyeden fazlaysa kullanıcı gerçekten ileri/geri sarmıştır (Seek)
+    if (Math.abs(diff) >= 4) {
+      currentTrack.currentTime = incomingSec;
+      lastServerSyncSec = incomingSec;
+      lastSyncTimestamp = performance.now();
+    } else if (diff < -0.5 && diff > -4 && currentTrack.isPlaying) {
+      // Sunucu 1-3 saniye geride bir veri gönderdiyse (Chrome arka plan gecikmesi),
+      // Akıcı süreyi asla geriye fırlatma! Mevcut akışı koru.
+    } else if (Math.abs(diff) > 0.8) {
+      // Küçük fark varsa hafifçe hizala
+      lastServerSyncSec = incomingSec;
+      lastSyncTimestamp = performance.now();
+      currentTrack.currentTime = incomingSec;
+    }
+  }
+
+  // data'nın diğer alanlarını kopyala (currentTime'ı yukarıda akıllıca koruduk)
+  const { currentTime: _, ...restData } = data;
+  currentTrack = { ...currentTrack, ...restData };
+
+  // Şarkı başlığı ve sanatçı (Akıllı Kayan Yazı)
+  const titleEl = document.getElementById('track-title');
+  const artistEl = document.getElementById('track-artist');
+  const newTitle = currentTrack.title || 'Müzik Bekleniyor...';
+  const newArtist = currentTrack.artist || 'YouTube Music';
+
+  if (titleEl && titleEl.innerText !== newTitle) {
+    titleEl.innerText = newTitle;
+    setupMarquee('title-marquee-container', titleEl);
+  }
+  if (artistEl && artistEl.innerText !== newArtist) {
+    artistEl.innerText = newArtist;
+    setupMarquee('artist-marquee-container', artistEl);
+  }
 
   // Albüm Kapağı (Yüksek Kaliteli veya Standart)
   if (currentTrack.artwork) {
@@ -224,9 +274,17 @@ function handleSeek(event) {
 
   if (currentTrack.duration > 0) {
     const targetSec = Math.floor(ratio * currentTrack.duration);
+    isSeeking = true;
     currentTrack.currentTime = targetSec;
+    lastServerSyncSec = targetSec;
+    lastSyncTimestamp = performance.now();
     updateProgressDisplay();
     sendCmd('seekTo', targetSec);
+
+    clearTimeout(seekTimeout);
+    seekTimeout = setTimeout(() => {
+      isSeeking = false;
+    }, 1000);
   }
 }
 
@@ -599,8 +657,68 @@ document.addEventListener('click', (e) => {
   }
 });
 
+// -------------------------------------------------------------
+// AKILLI KAYAN YAZI MOTORU (MARQUEE)
+// -------------------------------------------------------------
+function setupMarquee(containerId, textElement) {
+  if (!textElement) return;
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  // Önceki animasyonu sıfırla
+  textElement.classList.remove('marquee-scroll');
+  textElement.style.removeProperty('--marquee-translate');
+  textElement.style.removeProperty('--marquee-duration');
+  container.classList.remove('has-overflow');
+
+  // DOM yerleşimi sonrası boyutları hesapla
+  requestAnimationFrame(() => {
+    const containerWidth = container.clientWidth;
+    const textWidth = textElement.scrollWidth;
+
+    if (textWidth > containerWidth + 6) {
+      const overflowDiff = textWidth - containerWidth + 24;
+      container.classList.add('has-overflow');
+      textElement.style.setProperty('--marquee-translate', `-${overflowDiff}px`);
+      // Hız hesaplama: daha uzun metinler için orantılı süre (min 6s, max 18s)
+      const durationSec = Math.max(6, Math.min(18, Math.round(overflowDiff / 20) + 4));
+      textElement.style.setProperty('--marquee-duration', `${durationSec}s`);
+      textElement.classList.add('marquee-scroll');
+    }
+  });
+}
+
+window.addEventListener('resize', () => {
+  setupMarquee('title-marquee-container', document.getElementById('track-title'));
+  setupMarquee('artist-marquee-container', document.getElementById('track-artist'));
+});
+
+// -------------------------------------------------------------
+// HAKKINDA & AFİŞ MODAL KONTROLÜ
+// -------------------------------------------------------------
+function openAboutModal() {
+  const modal = document.getElementById('about-modal');
+  if (modal) {
+    modal.classList.add('show');
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+function closeAboutModal(event) {
+  if (event && event.target && event.target !== event.currentTarget && !event.target.classList.contains('about-close-btn')) {
+    return;
+  }
+  const modal = document.getElementById('about-modal');
+  if (modal) {
+    modal.classList.remove('show');
+    document.body.style.overflow = '';
+  }
+}
+
 // Başlat
 window.addEventListener('DOMContentLoaded', () => {
   connectWebSocket();
   startProgressTimer();
+  setupMarquee('title-marquee-container', document.getElementById('track-title'));
+  setupMarquee('artist-marquee-container', document.getElementById('track-artist'));
 });
