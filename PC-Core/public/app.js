@@ -53,19 +53,119 @@ function showToast(message) {
   }, 2800);
 }
 
+// -------------------------------------------------------------
+// AKILLI ARKA PLAN / ÖN PLAN BAĞLANTI & SENKRONİZASYON MOTORU
+// -------------------------------------------------------------
+let reconnectTimer = null;
+let lastWsMessageTime = performance.now();
+let isSyncing = false;
+let syncRetryTimeout = null;
+
+// REST API üzerinden anında son medya durumunu al (0 gecikme)
+async function fetchCurrentState(isRetry = false) {
+  if (isSyncing) return;
+  isSyncing = true;
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2500);
+    const res = await fetch('/api/status', {
+      cache: 'no-store',
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    if (res.ok) {
+      const json = await res.json();
+      if (json.media) {
+        updateUI(json.media);
+      }
+      if (syncRetryTimeout) {
+        clearTimeout(syncRetryTimeout);
+        syncRetryTimeout = null;
+      }
+    } else if (!isRetry && document.visibilityState === 'visible') {
+      scheduleSyncRetry();
+    }
+  } catch (err) {
+    if (!isRetry && document.visibilityState === 'visible') {
+      scheduleSyncRetry();
+    }
+  } finally {
+    isSyncing = false;
+  }
+}
+
+function scheduleSyncRetry() {
+  if (syncRetryTimeout) clearTimeout(syncRetryTimeout);
+  syncRetryTimeout = setTimeout(() => {
+    syncRetryTimeout = null;
+    fetchCurrentState(true);
+  }, 1200);
+}
+
+function ensureWebSocketConnected() {
+  if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+    connectWebSocket();
+  } else if (ws.readyState === WebSocket.OPEN) {
+    try {
+      ws.send(JSON.stringify({ action: 'sync' }));
+    } catch (e) {
+      connectWebSocket(true);
+    }
+  }
+}
+
+function scheduleReconnect() {
+  if (reconnectTimer) return;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connectWebSocket();
+  }, 2000);
+}
+
 // WebSocket Bağlantısı
-function connectWebSocket() {
+function connectWebSocket(forceNew = false) {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+
+  if (!forceNew && ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
+
+  if (ws) {
+    try {
+      ws.onopen = null;
+      ws.onmessage = null;
+      ws.onclose = null;
+      ws.onerror = null;
+      ws.close();
+    } catch (_) {}
+    ws = null;
+  }
+
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const wsUrl = `${protocol}//${window.location.host}`;
 
-  ws = new WebSocket(wsUrl);
+  try {
+    ws = new WebSocket(wsUrl);
+  } catch (err) {
+    updateConnBadge(false);
+    scheduleReconnect();
+    return;
+  }
 
   ws.onopen = () => {
+    lastWsMessageTime = performance.now();
     updateConnBadge(true);
     fetchNetworkStatus();
+    try {
+      ws.send(JSON.stringify({ action: 'sync' }));
+    } catch (_) {}
   };
 
   ws.onmessage = (event) => {
+    lastWsMessageTime = performance.now();
     try {
       const msg = JSON.parse(event.data);
       if (msg.type === 'sync' || msg.type === 'track-change') {
@@ -78,7 +178,7 @@ function connectWebSocket() {
 
   ws.onclose = () => {
     updateConnBadge(false);
-    setTimeout(connectWebSocket, 2000);
+    scheduleReconnect();
   };
 
   ws.onerror = () => {
@@ -715,8 +815,73 @@ function closeAboutModal(event) {
   }
 }
 
+// -------------------------------------------------------------
+// YAŞAM DÖNGÜSÜ (LIFECYCLE) & ARKA PLANDAN ÖN PLANA DÖNÜŞ KONTROLLERİ
+// -------------------------------------------------------------
+window.onAppResume = function() {
+  // 1. HTTP REST ile anında son durumu çek ve arayüzü güncelle (0 gecikme)
+  fetchCurrentState();
+
+  // 2. WebSocket bağlantısının sağlığını kontrol et / zombiyse anında yenile
+  const timeSinceLastMsg = performance.now() - lastWsMessageTime;
+  if (!ws || ws.readyState !== WebSocket.OPEN || timeSinceLastMsg > 8000) {
+    connectWebSocket(true);
+  } else {
+    try {
+      ws.send(JSON.stringify({ action: 'sync' }));
+    } catch (_) {
+      connectWebSocket(true);
+    }
+  }
+
+  // 3. İlerleme sayacını yeniden canlandır
+  startProgressTimer();
+};
+
+// Tarayıcı ve WebView görünürlük olayları
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    window.onAppResume();
+  }
+});
+
+window.addEventListener('focus', () => {
+  window.onAppResume();
+});
+
+window.addEventListener('pageshow', () => {
+  window.onAppResume();
+});
+
+window.addEventListener('online', () => {
+  window.onAppResume();
+});
+
+// Arka planda donmuş olabilecek bağlantılar için koruma bekçisi (Watchdog)
+setInterval(() => {
+  if (document.visibilityState === 'visible') {
+    const timeSinceLastMsg = performance.now() - lastWsMessageTime;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      ensureWebSocketConnected();
+    } else if (timeSinceLastMsg > 6000) {
+      // 6 saniyedir sunucudan mesaj gelmediyse senkronize et
+      try {
+        ws.send(JSON.stringify({ action: 'sync' }));
+      } catch (_) {
+        connectWebSocket(true);
+      }
+    }
+    if (timeSinceLastMsg > 15000) {
+      // 15 saniyedir hiç veri gelmediyse bağlantı zombileşmiştir, sıfırla
+      connectWebSocket(true);
+      fetchCurrentState();
+    }
+  }
+}, 3000);
+
 // Başlat
 window.addEventListener('DOMContentLoaded', () => {
+  fetchCurrentState(); // Sayfa açılır açılmaz anında ilk veriyi getir
   connectWebSocket();
   startProgressTimer();
   setupMarquee('title-marquee-container', document.getElementById('track-title'));

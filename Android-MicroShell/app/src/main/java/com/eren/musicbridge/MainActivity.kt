@@ -20,11 +20,13 @@ class MainActivity : AppCompatActivity() {
     private val PREFS_NAME = "MusicBridgePrefs"
     private val KEY_SERVER_URL = "server_url"
 
+    private var hasPageLoaded = false
+
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Arka Plan Servisini Baslat (Huawei Saat & Kilit Ekrani)
+        // Arka Plan Servisini Baslat (Akilli Saat & Kilit Ekrani)
         val serviceIntent = Intent(this, MediaBridgeService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(serviceIntent)
@@ -46,7 +48,12 @@ class MainActivity : AppCompatActivity() {
             // Web ile Kotlin Koprusu
             addJavascriptInterface(ErenBridge(this@MainActivity), "ErenBridge")
 
-            webViewClient = WebViewClient()
+            webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    super.onPageFinished(view, url)
+                    hasPageLoaded = true
+                }
+            }
             webChromeClient = WebChromeClient()
 
             // Uzun basildiginda acil durum IP degistirme menusu
@@ -124,6 +131,30 @@ class MainActivity : AppCompatActivity() {
             }
             .setCancelable(false)
             .show()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        webView.onResume()
+        webView.resumeTimers()
+
+        val currentUrl = webView.url
+        // Eger sayfa hic yuklenemediyse veya hata sayfasindaysa, kayitli adresi yeniden yukle
+        if (currentUrl.isNullOrBlank() || currentUrl.startsWith("data:") || !hasPageLoaded) {
+            val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val savedUrl = prefs.getString(KEY_SERVER_URL, "")
+            if (!savedUrl.isNullOrBlank()) {
+                loadServer(savedUrl)
+            }
+        } else {
+            // Sayfa hazirsa JavaScript yasam dongusu fonksiyonunu tetikle
+            webView.evaluateJavascript("if (typeof window.onAppResume === 'function') { window.onAppResume(); }", null)
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        webView.onPause()
     }
 
     override fun onBackPressed() {

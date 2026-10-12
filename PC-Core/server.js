@@ -436,6 +436,14 @@ wss.on('connection', ws => {
   ws.on('message', async message => {
     try {
       const msg = JSON.parse(message);
+      if (msg.action === 'sync') {
+        ws.send(JSON.stringify({ type: 'sync', data: currentState }));
+        return;
+      }
+      if (msg.action === 'ping') {
+        ws.send(JSON.stringify({ type: 'pong' }));
+        return;
+      }
       if (msg.action) {
         await executeMediaCommand(msg.action, msg.data);
       }
