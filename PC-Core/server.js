@@ -133,7 +133,7 @@ async function resolveHighResTrackInfo(title, artist) {
     }
   } catch (e) {}
 
-  // 2. YouTube Video ID Çözümleme (NewPipe doğrudan açabilsin ve YouTube kapağı)
+  // 2. YouTube Video ID Çözümleme (Telefonda doğrudan açabilsin ve YouTube kapağı)
   try {
     const ytUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
     const ytRes = await fetch(ytUrl, {

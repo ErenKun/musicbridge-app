@@ -218,7 +218,7 @@ function updateUI(data) {
   // Windows Medya Oturumu & Kaynak Seçici Arayüzü
   updateSessionUI();
 
-  // ANDROID MICRO-SHELL (HUAWEI SAAT) SENKRONİZASYONU
+  // ANDROID MICRO-SHELL (AKILLI SAAT) SENKRONİZASYONU
   if (window.ErenBridge) {
     try {
       window.ErenBridge.syncTrack(
@@ -337,7 +337,7 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-// NewPipe'ta Kaldığı Yerden Devam Et (Tam Şarkı Parametreleriyle)
+// Telefonda Kaldığı Yerden Devam Et (Tam Şarkı Parametreleriyle)
 function triggerNewPipeResume() {
   const videoId = currentTrack.videoId || '';
   const seconds = Math.floor(currentTrack.currentTime) || 0;
@@ -345,7 +345,7 @@ function triggerNewPipeResume() {
   const artist = currentTrack.artist || '';
 
   if (window.ErenBridge) {
-    // Android Shell içindeyse yerel Intent ile doğrudan NewPipe'ta aç
+    // Android Shell içindeyse yerel Intent ile doğrudan telefonda aç
     window.ErenBridge.openNewPipe(videoId, seconds, title, artist);
   } else {
     // Tarayıcıdaysa YouTube direkt bağlantısı aç

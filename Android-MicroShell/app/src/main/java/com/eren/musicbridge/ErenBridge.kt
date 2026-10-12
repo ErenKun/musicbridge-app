@@ -9,7 +9,7 @@ class ErenBridge(private val context: Context) {
 
     /**
      * Web arayuzu sarki degistiginde cagirir.
-     * Bu sayede Huawei Watch Fit 4 saatin ekranina bilgi aktarilir.
+     * Bu sayede akilli saatin ekranina bilgi aktarilir.
      */
     @JavascriptInterface
     fun syncTrack(title: String, artist: String, durationMs: Long, isPlaying: Boolean) {
@@ -17,7 +17,7 @@ class ErenBridge(private val context: Context) {
     }
 
     /**
-     * Web arayuzundeki "NewPipe'ta Ac" butonuna basildiginda cagirilir.
+     * Web arayuzundeki "Telefonda Ac" butonuna basildiginda cagirilir.
      */
     @JavascriptInterface
     fun openNewPipe(videoId: String?, seconds: Int, title: String?, artist: String?) {

@@ -45,7 +45,7 @@ class MediaBridgeService : Service() {
         const val KEY_SERVER_URL = "server_url"
         var instance: MediaBridgeService? = null
 
-        // Huawei Watch ve tum akilli saatlerin destekledigi tam eylem listesi
+        // Tum akilli saatlerin destekledigi tam eylem listesi
         const val SUPPORTED_ACTIONS = PlaybackStateCompat.ACTION_PLAY or
                 PlaybackStateCompat.ACTION_PAUSE or
                 PlaybackStateCompat.ACTION_PLAY_PAUSE or
@@ -183,7 +183,7 @@ class MediaBridgeService : Service() {
     }
 
     /**
-     * Huawei Watch Fit 4 ve sistem bildirimi icin sarki bilgilerini gunceller.
+     * Akilli saat ve sistem bildirimi icin sarki bilgilerini gunceller.
      */
     fun updateTrackInfo(title: String, artist: String, durationMs: Long, isPlaying: Boolean) {
         lastTitle = title
@@ -198,7 +198,7 @@ class MediaBridgeService : Service() {
             .build()
         mediaSession.setMetadata(metadata)
 
-        // 2. Playback State (Huawei Watch icin daima 0L veya gecerli pozisyon, asla -1 verilmez)
+        // 2. Playback State (Akilli saatler icin daima 0L veya gecerli pozisyon, asla -1 verilmez)
         val state = PlaybackStateCompat.Builder()
             .setActions(SUPPORTED_ACTIONS)
             .setState(
@@ -260,7 +260,7 @@ class MediaBridgeService : Service() {
     }
 
     /**
-     * Telefon kilitliyken veya uygulama kapaliyken Huawei Saat ve Bildirim senkronizasyonunu
+     * Telefon kilitliyken veya uygulama kapaliyken Akilli Saat ve Bildirim senkronizasyonunu
      * son derece dusuk pil tuketimiyle guncel tutar.
      */
     private fun startBackgroundSync() {
@@ -307,7 +307,7 @@ class MediaBridgeService : Service() {
                 "MusicBridge Oynatma Servisi",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Huawei Watch ve kilit ekrani muzik kontrollerini yonetir"
+                description = "Akilli saat ve kilit ekrani muzik kontrollerini yonetir"
                 setShowBadge(false)
             }
             val manager = getSystemService(NotificationManager::class.java)
