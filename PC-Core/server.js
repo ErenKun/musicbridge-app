@@ -822,8 +822,12 @@ async function executeMediaCommand(action, data) {
     }).catch(() => {});
   } catch (err) {}
 
-  // 3. Tarayıcı Userscript'ine yayınla (bağlıysa doğrudan web player'ı tetikler)
-  broadcast({ type: 'browser-command', action, data });
+  // 3. Tarayıcı Eklentisine YALNIZCA eklentiye özel komutları ilet (seekToQueueIndex vb.)
+  // Generic oynatma komutları (playPause, next, previous) Windows GSMTC tarafından işletilir.
+  // Her ikisinin aynı anda tetiklenmesi çifte komuta (2 kez basma / jitter) yol açar.
+  if (action === 'seekToQueueIndex') {
+    broadcast({ type: 'browser-command', action, data });
+  }
 }
 
 // th-ch/youtube-music API'sini periyodik yokla
@@ -847,15 +851,42 @@ async function pollThChApi() {
 
 // Tarayıcı eklentisinden durum güncellemesi
 function updateStateFromBrowser(data) {
-  if (data.artwork) {
-    // Küçük boyutlu kapak parametrelerini yüksek çözünürlüğe çevir
-    data.artwork = data.artwork
-      .replace(/=w\d+-h\d+[^=]*/, '=w600-h600-l90-rj')
-      .replace(/=s\d+[^=]*/, '=s800');
+  let changed = false;
+
+  // 1. Kuyruk / Çalma listesi bilgisi (Eklentinin asıl süper gücü)
+  if (Array.isArray(data.queue) && data.queue.length > 0) {
+    if (JSON.stringify(currentState.queue) !== JSON.stringify(data.queue)) {
+      currentState.queue = data.queue;
+      changed = true;
+    }
   }
 
-  currentState = { ...currentState, ...data };
-  broadcast({ type: 'track-change', data: currentState });
+  // 2. Video ID (Telefonda açmak için)
+  if (data.videoId && currentState.videoId !== data.videoId) {
+    currentState.videoId = data.videoId;
+    changed = true;
+  }
+
+  // 3. Eğer yerel Windows GSMTC henüz müzik yakalamadıysa (Boşta ise),
+  // tarayıcı eklentisinin verisini yedek olarak ana duruma yaz.
+  // Ancak Windows GSMTC zaten bir oturum takip ediyorsa, başlık ve durumların
+  // birbiriyle yarışıp ekranı ve sekmeleri titretmesini engellemek için GSMTC tek gerçek kaynaktır!
+  const isGsmtcActive = currentState.sourceApp && currentState.sourceApp !== 'Boşta' && !currentState.title.includes('Bekleniyor');
+  if (!isGsmtcActive) {
+    if (data.title && currentState.title !== data.title) {
+      currentState.title = data.title;
+      currentState.artist = data.artist || 'YouTube Music';
+      currentState.isPlaying = !!data.isPlaying;
+      currentState.currentTime = data.currentTime || 0;
+      currentState.duration = data.duration || 0;
+      currentState.sourceApp = data.sourceApp || 'YouTube Music';
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    broadcast({ type: 'track-change', data: currentState });
+  }
 }
 
 // 2 saniyede bir masaüstü th-ch kuyruk kontrolü

@@ -457,38 +457,21 @@ function clearQueueSearch() {
   filterQueue('');
 }
 
-// Akıllı Kuyruk Atlama Algoritması (Extension + Smart Next/Prev Fallback)
+// Akıllı Kuyruk Atlama Algoritması
+let isJumpingTrack = false;
 function jumpToQueueIndex(targetIdx) {
+  if (isJumpingTrack) return;
   if (targetIdx === currentQueueActiveIndex) {
     showToast('▶ Bu parça zaten şu anda çalıyor.');
     return;
   }
 
-  // 1. Tarayıcı eklentisine doğrudan indeks atlama komutu gönder
-  sendCmd('seekToQueueIndex', targetIdx);
+  isJumpingTrack = true;
+  setTimeout(() => { isJumpingTrack = false; }, 800);
 
-  // 2. Yerel Windows GSMTC / Medya Oynatıcı için akıllı çoklu adım mantığı (Fallback)
-  if (currentQueueActiveIndex !== -1) {
-    const diff = targetIdx - currentQueueActiveIndex;
-    if (diff > 0) {
-      showToast(`⏭ ${diff} parça ileri atlanıyor...`);
-      for (let i = 0; i < diff; i++) {
-        setTimeout(() => sendCmd('next'), i * 160);
-      }
-    } else if (diff < 0) {
-      const absDiff = Math.abs(diff);
-      // Eğer çalan şarkı 3 saniyeyi geçmişse, Windows/YTMusic ilk 'previous' komutunda
-      // şarkıyı sıfırlar (00:00). Önceki şarkıya geçmek için fazladan 1 tıklama gerekir!
-      const extraPress = (currentTrack.currentTime > 3) ? 1 : 0;
-      const totalPresses = absDiff + extraPress;
-      showToast(`⏮ ${absDiff} parça geri gidiliyor...`);
-      for (let i = 0; i < totalPresses; i++) {
-        setTimeout(() => sendCmd('previous'), i * 160);
-      }
-    }
-  } else {
-    showToast('Parçaya atlanıyor...');
-  }
+  // Tarayıcı eklentisine doğrudan indeks atlama komutu gönder
+  sendCmd('seekToQueueIndex', targetIdx);
+  showToast('▶ Parçaya geçiliyor...');
 }
 
 // Kuyruk Render
@@ -572,26 +555,16 @@ function renderQueue(queueItems) {
     return;
   }
 
-  container.innerHTML = displayItems.map(item => {
+  container.innerHTML = displayItems.map((item, displayIdx) => {
     const isPlaying = (foundIdx !== -1 && deduplicated[foundIdx] === item);
     const targetIndex = item.originalIndex;
     const durationStr = item.duration ? (typeof item.duration === 'number' ? formatTime(item.duration) : item.duration) : '';
-
-    // Bağıl konum hesapla (+1 sonra, -2 önce vb.)
-    let offsetBadge = '';
-    if (foundIdx !== -1 && !isPlaying) {
-      const offset = targetIndex - currentQueueActiveIndex;
-      if (offset > 0) {
-        offsetBadge = `<span class="queue-offset-badge next-track">+${offset} Sonra</span>`;
-      } else if (offset < 0) {
-        offsetBadge = `<span class="queue-offset-badge prev-track">${offset} Önce</span>`;
-      }
-    }
+    const itemNumber = displayIdx + 1;
 
     return `
-      <div class="queue-item ${isPlaying ? 'playing' : ''}" onclick="jumpToQueueIndex(${targetIndex})" title="${isPlaying ? 'Şu an çalıyor' : 'Bu parçaya atlamak için tıklayın'}">
+      <div class="queue-item ${isPlaying ? 'playing' : ''}" onclick="jumpToQueueIndex(${targetIndex})" title="${isPlaying ? 'Şu an çalıyor' : 'Bu parçayı çal'}">
         <div class="queue-item-left">
-          <span class="queue-index-badge">${targetIndex + 1}</span>
+          <span class="queue-index-badge">${itemNumber}</span>
           <div class="eq-bars">
             <span class="eq-bar eq-bar-1"></span>
             <span class="eq-bar eq-bar-2"></span>
@@ -600,13 +573,12 @@ function renderQueue(queueItems) {
           <div class="queue-item-details">
             <div class="queue-item-title-row">
               <span class="queue-item-title">${escapeHtml(item.title || 'İsimsiz')}</span>
-              ${isPlaying ? '<span class="now-playing-tag">▶ Çalıyor</span>' : ''}
+              ${isPlaying ? '<span class="now-playing-tag">Çalıyor</span>' : ''}
             </div>
             <div class="queue-item-sub">${escapeHtml(item.artist || 'Bilinmiyor')}</div>
           </div>
         </div>
         <div class="queue-item-right">
-          ${offsetBadge}
           ${durationStr ? `<span class="queue-duration">${durationStr}</span>` : ''}
           ${!isPlaying ? `
             <button class="btn-jump" onclick="event.stopPropagation(); jumpToQueueIndex(${targetIndex})" title="Bu parçaya atla">

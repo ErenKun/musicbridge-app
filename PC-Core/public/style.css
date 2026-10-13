@@ -767,21 +767,21 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
+  padding: 12px 14px;
+  min-height: 58px;
   background: var(--bg-card);
   border-radius: 12px;
   border: 1px solid var(--border);
-  font-size: 0.85rem;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
-  overflow: hidden;
+  gap: 12px;
+  box-sizing: border-box;
 }
 
 .queue-item:hover {
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(99, 102, 241, 0.4);
-  transform: translateY(-1px);
 }
 
 /* ŞU AN ÇALAN ŞARKI (ÖNE ÇIKAN GÖRÜNÜM) */
@@ -799,6 +799,7 @@ body {
   bottom: 0;
   width: 4px;
   background: linear-gradient(180deg, var(--accent), #ec4899);
+  border-radius: 4px 0 0 4px;
 }
 
 .queue-item-left {
@@ -810,10 +811,10 @@ body {
 }
 
 .queue-index-badge {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: 700;
   color: var(--text-muted);
-  width: 22px;
+  width: 24px;
   text-align: center;
   flex-shrink: 0;
   font-family: monospace;
@@ -828,7 +829,7 @@ body {
   display: none;
   align-items: flex-end;
   gap: 2.5px;
-  width: 22px;
+  width: 24px;
   height: 18px;
   flex-shrink: 0;
 }
@@ -856,22 +857,27 @@ body {
 .queue-item-details {
   min-width: 0;
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
 }
 
 .queue-item-title-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
 }
 
 .queue-item-title {
+  font-size: 0.88rem;
   font-weight: 600;
   color: var(--text-main);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100%;
+  line-height: 1.35;
 }
 
 .queue-item.playing .queue-item-title {
@@ -884,21 +890,22 @@ body {
   font-weight: 700;
   padding: 1px 6px;
   background: rgba(16, 185, 129, 0.2);
-  border: 1px solid rgba(16, 185, 129, 0.4);
+  border: 1px solid rgba(16, 185, 129, 0.45);
   color: #34d399;
   border-radius: 6px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .queue-item-sub {
-  font-size: 0.74rem;
+  font-size: 0.76rem;
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-top: 2px;
+  line-height: 1.35;
 }
 
 .queue-item-right {
@@ -908,27 +915,8 @@ body {
   flex-shrink: 0;
 }
 
-.queue-offset-badge {
-  font-size: 0.65rem;
-  font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-muted);
-}
-
-.queue-offset-badge.next-track {
-  background: rgba(99, 102, 241, 0.15);
-  color: #a5b4fc;
-}
-
-.queue-offset-badge.prev-track {
-  background: rgba(245, 158, 11, 0.15);
-  color: #fbbf24;
-}
-
 .queue-duration {
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   color: var(--text-muted);
   font-family: monospace;
 }
