@@ -742,6 +742,10 @@ wss.on('connection', ws => {
         ws.send(JSON.stringify({ type: 'pong' }));
         return;
       }
+      if (msg.action === 'browser-update') {
+        updateStateFromBrowser(msg.data);
+        return;
+      }
       if (msg.action) {
         await executeMediaCommand(msg.action, msg.data);
       }

@@ -11,7 +11,10 @@
     "https://music.youtube.com/*",
     "https://open.spotify.com/*",
     "https://soundcloud.com/*",
-    "http://localhost:8765/*"
+    "http://localhost:8765/*",
+    "http://127.0.0.1:8765/*",
+    "ws://localhost:8765/*",
+    "ws://127.0.0.1:8765/*"
   ],
   "background": {
     "service_worker": "background.js"

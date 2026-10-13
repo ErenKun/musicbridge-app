@@ -5,7 +5,6 @@
   'use strict';
 
   const CORE_WS_URL = 'ws://localhost:8765';
-  const CORE_HTTP_URL = 'http://localhost:8765/api/browser-update';
   let ws = null;
   let isConnected = false;
 
@@ -180,11 +179,23 @@
     }
 
     if (trackInfo) {
-      fetch(CORE_HTTP_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(trackInfo)
-      }).catch(() => {});
+      // 1. WebSocket üzerinden direkt iletim (En hızlı ve güvenli yöntem)
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        try {
+          ws.send(JSON.stringify({ action: 'browser-update', data: trackInfo }));
+          return;
+        } catch (_) {}
+      }
+
+      // 2. Arka plan servis çalışanı (Background Service Worker) üzerinden proxy iletim
+      // (Manifest V3'te arka plan servisi sayfanın CSP ve Mixed-Content kısıtlamalarına tabi değildir)
+      try {
+        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+          chrome.runtime.sendMessage({ type: 'BROWSER_UPDATE', data: trackInfo }, () => {
+            if (chrome.runtime.lastError) {}
+          });
+        }
+      } catch (_) {}
     }
   }, 1000);
 })();
