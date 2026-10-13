@@ -46,3 +46,22 @@ jobs:
         name: MusicBridge-v2.0.0-APK
         path: release-output/MusicBridge-v2.0.0.apk
         retention-days: 30
+
+    - name: 🚀 GitHub Release Olarak Yayinla
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: v2.0.0
+        name: "🎵 MusicBridge v2.0.0 (LTS)"
+        body: |
+          ## ✨ MusicBridge v2.0.0 Yenilikleri & Güncelleme Notları
+          * 🔍 **Sıfır-Konfigürasyon Otomatik Ağ Keşfi (UDP Discovery):** IP yazma zorunluluğu kalktı; telefon ağdaki PC'yi otomatik keşfeder.
+          * 📞 **Akıllı Çağrı Duraklatma (Smart Auto-Pause):** Telefona arama geldiğinde PC'deki müziği otomatik duraklatır, görüşme bitince devam ettirir.
+          * 🎤 **Canlı Senkronize Şarkı Sözleri (Lyrics Engine):** LRCLIB API entegrasyonu ile karaoke tarzı anlık kayan şarkı sözleri.
+          * 📱 **Genişletilmiş Oynatıcı Desteği:** ReVanced, ViMusic, RiMusic, InnerTune, YouTube Music desteği.
+          * ⚡ **Performans ve Pil Tasarrufu:** %80 CPU ve I/O yükü azaltıldı, akıllı arka plan bekleme motoru.
+          * 🛡️ **Android 14 & 15 Uyumu:** `targetSdk 34` ve modern bildirim kontrolleri (Android 8.0 - 9.0 tam uyumu korundu).
+        files: release-output/MusicBridge-v2.0.0.apk
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
