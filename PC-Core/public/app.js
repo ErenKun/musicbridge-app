@@ -46,12 +46,14 @@ function switchView(viewId) {
   const targetView = document.getElementById(viewId);
   if (targetView) targetView.classList.add('active');
 
-  const tabIndex = viewId === 'player-view' ? 0 : viewId === 'queue-view' ? 1 : 2;
+  const tabIndex = viewId === 'player-view' ? 0 : viewId === 'queue-view' ? 1 : viewId === 'lyrics-view' ? 2 : 3;
   const tabs = document.querySelectorAll('.tab-btn');
   if (tabs[tabIndex]) tabs[tabIndex].classList.add('active');
 
   if (viewId === 'network-view') {
     fetchNetworkStatus();
+  } else if (viewId === 'lyrics-view') {
+    fetchCurrentLyrics();
   }
 }
 
@@ -239,6 +241,9 @@ function updateProgressDisplay() {
   } else {
     document.getElementById('progress-fill').style.width = '0%';
   }
+
+  // Senkronize şarkı sözü satırını güncelle
+  updateActiveLyricLine();
 }
 
 // Arayüzü Güncelle
@@ -246,6 +251,11 @@ function updateUI(data) {
   if (!data) return;
   const isPlayingChanged = currentTrack.isPlaying !== data.isPlaying;
   const trackChanged = (currentTrack.title !== data.title) || (currentTrack.artist !== data.artist);
+
+  if (trackChanged) {
+    // Parça değiştiğinde şarkı sözlerini arka planda tazele
+    fetchCurrentLyrics();
+  }
 
   // Gelen sunucu süresini akıllıca filtrele (Geri sıçrama ve jitter koruması)
   const incomingSec = (typeof data.currentTime === 'number') ? data.currentTime : 0;
@@ -461,6 +471,128 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.innerText = text;
   return div.innerHTML;
+}
+
+// -------------------------------------------------------------
+// ŞARKI SÖZLERİ MOTORU (LRCLIB & SENKRONİZASYON)
+// -------------------------------------------------------------
+let currentLyricsData = null;
+let parsedSyncedLyrics = [];
+let lastLyricsTrackKey = '';
+
+async function fetchCurrentLyrics(force = false) {
+  const title = currentTrack.title || '';
+  const artist = currentTrack.artist || '';
+  if (!title || title.includes('Bekleniyor') || title.includes('Boşta')) {
+    renderLyrics({ plainLyrics: 'Şarkı çalındığında sözler burada görünecektir.' });
+    return;
+  }
+
+  const trackKey = `${title}|${artist}`;
+  if (!force && trackKey === lastLyricsTrackKey && currentLyricsData) {
+    renderLyrics(currentLyricsData);
+    return;
+  }
+
+  const titleEl = document.getElementById('lyrics-track-title');
+  const artistEl = document.getElementById('lyrics-track-artist');
+  const contentEl = document.getElementById('lyrics-content');
+
+  if (titleEl) titleEl.innerText = title;
+  if (artistEl) artistEl.innerText = artist;
+  if (contentEl) contentEl.innerHTML = '<p class="lyrics-loading">Şarkı sözleri aranıyor...</p>';
+
+  try {
+    const res = await fetch(`/api/lyrics?title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.lyrics) {
+        lastLyricsTrackKey = trackKey;
+        currentLyricsData = data.lyrics;
+        renderLyrics(data.lyrics);
+        return;
+      }
+    }
+    renderLyrics({ plainLyrics: 'Şarkı sözü bulunamadı.' });
+  } catch (err) {
+    renderLyrics({ plainLyrics: 'Şarkı sözleri yüklenirken hata oluştu.' });
+  }
+}
+
+function parseLrc(lrcText) {
+  if (!lrcText) return [];
+  const lines = lrcText.split('\n');
+  const result = [];
+  const timeRegex = /\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)/;
+
+  for (const line of lines) {
+    const match = timeRegex.exec(line.trim());
+    if (match) {
+      const min = parseInt(match[1], 10);
+      const sec = parseInt(match[2], 10);
+      const ms = parseFloat('0.' + match[3]);
+      const totalSec = min * 60 + sec + ms;
+      const text = match[4].trim();
+      if (text) {
+        result.push({ time: totalSec, text });
+      }
+    }
+  }
+  return result;
+}
+
+function renderLyrics(lyrics) {
+  const contentEl = document.getElementById('lyrics-content');
+  const badgeEl = document.getElementById('lyrics-badge');
+  if (!contentEl) return;
+
+  if (lyrics.syncedLyrics) {
+    parsedSyncedLyrics = parseLrc(lyrics.syncedLyrics);
+    if (badgeEl) {
+      badgeEl.innerText = '⚡ Canlı Senkronize';
+      badgeEl.style.color = '#10b981';
+    }
+    contentEl.innerHTML = parsedSyncedLyrics.map((item, idx) => `
+      <div class="lyrics-line" id="lrc-line-${idx}" onclick="sendCmd('seekTo', ${Math.floor(item.time)})">${escapeHtml(item.text)}</div>
+    `).join('');
+    updateActiveLyricLine();
+  } else if (lyrics.plainLyrics) {
+    parsedSyncedLyrics = [];
+    if (badgeEl) {
+      badgeEl.innerText = 'Düz Metin';
+      badgeEl.style.color = '#818cf8';
+    }
+    contentEl.innerHTML = `<div class="lyrics-plain">${escapeHtml(lyrics.plainLyrics)}</div>`;
+  } else {
+    parsedSyncedLyrics = [];
+    contentEl.innerHTML = '<p class="lyrics-empty">Bu parça için şarkı sözü bulunamadı.</p>';
+  }
+}
+
+function updateActiveLyricLine() {
+  if (!parsedSyncedLyrics || parsedSyncedLyrics.length === 0) return;
+  const currentSec = currentTrack.currentTime || 0;
+
+  let activeIdx = -1;
+  for (let i = 0; i < parsedSyncedLyrics.length; i++) {
+    if (currentSec >= parsedSyncedLyrics[i].time) {
+      activeIdx = i;
+    } else {
+      break;
+    }
+  }
+
+  const lines = document.querySelectorAll('.lyrics-line');
+  lines.forEach((line, idx) => {
+    if (idx === activeIdx) {
+      if (!line.classList.contains('active')) {
+        line.classList.add('active');
+        line.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    } else {
+      line.classList.remove('active');
+    }
+  });
 }
 
 // Telefonda Kaldığı Yerden Devam Et (Tam Şarkı Parametreleriyle)

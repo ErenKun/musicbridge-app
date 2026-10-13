@@ -27,6 +27,7 @@
     <nav class="nav-tabs">
       <button class="tab-btn active" onclick="switchView('player-view')">Çalar</button>
       <button class="tab-btn" onclick="switchView('queue-view')">Kuyruk</button>
+      <button class="tab-btn" onclick="switchView('lyrics-view')">Sözler</button>
       <button class="tab-btn" onclick="switchView('network-view')">Bağlantı</button>
     </nav>
 
@@ -164,7 +165,27 @@
       </div>
     </section>
 
-    <!-- GÖRÜNÜM 3: BAĞLANTI & AYARLAR -->
+    <!-- GÖRÜNÜM 3: ŞARKI SÖZLERİ (LRCLIB ENTEGRASYONU) -->
+    <section id="lyrics-view" class="view">
+      <div class="lyrics-header">
+        <div>
+          <h3>Şarkı Sözleri</h3>
+          <span class="lyrics-badge" id="lyrics-badge">Canlı Senkron</span>
+        </div>
+        <button class="btn-icon" onclick="fetchCurrentLyrics(true)" title="Sözleri Yenile">🔄</button>
+      </div>
+      <div class="lyrics-card" id="lyrics-card">
+        <div class="lyrics-song-info" id="lyrics-song-info">
+          <strong id="lyrics-track-title">-</strong>
+          <span id="lyrics-track-artist">-</span>
+        </div>
+        <div class="lyrics-container" id="lyrics-content">
+          <p class="lyrics-loading">Şarkı sözleri yükleniyor...</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- GÖRÜNÜM 4: BAĞLANTI & AYARLAR -->
     <section id="network-view" class="view">
       <!-- Durum Kartı -->
       <div class="net-card">

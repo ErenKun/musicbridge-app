@@ -7,12 +7,19 @@ import android.widget.Toast
 import java.net.URLEncoder
 
 object NewPipeLauncher {
-    // Bilinen tum NewPipe ve NewPipe catallari paket listesi
-    private val NEWPIPE_PACKAGES = listOf(
-        "org.schabi.newpipe",             // Resmi NewPipe
-        "org.polymorphicshade.newpipe",   // NewPipe x SponsorBlock
-        "Infinity.Player",                // PipePipe
-        "org.schabi.newpipe.debug"        // Debug
+    // Bilinen tum NewPipe, ReVanced, ViMusic ve alternatif oynatici paketleri
+    private val PLAYER_PACKAGES = listOf(
+        "org.schabi.newpipe",                    // Resmi NewPipe
+        "org.polymorphicshade.newpipe",          // NewPipe x SponsorBlock
+        "Infinity.Player",                       // PipePipe
+        "app.revanced.android.apps.youtube.music", // YouTube Music ReVanced
+        "app.revanced.android.youtube",          // YouTube ReVanced
+        "it.vfsfitvnm.vimusic",                  // ViMusic
+        "it.fast4x.rimusic",                     // RiMusic
+        "com.zionhuang.music",                   // InnerTune
+        "com.google.android.apps.youtube.music", // Resmi YouTube Music
+        "com.google.android.youtube",            // Resmi YouTube
+        "org.schabi.newpipe.debug"               // Debug
     )
 
     /**
@@ -37,8 +44,8 @@ object NewPipeLauncher {
 
         val uri = Uri.parse(targetUrl)
 
-        // 1. Once yuklu NewPipe paketlerini tek tek dene
-        for (pkg in NEWPIPE_PACKAGES) {
+        // 1. Once yuklu oynatici paketlerini tek tek dene
+        for (pkg in PLAYER_PACKAGES) {
             try {
                 val intent = Intent(Intent.ACTION_VIEW, uri).apply {
                     setPackage(pkg)

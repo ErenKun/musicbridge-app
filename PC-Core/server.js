@@ -2,6 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const dgram = require('dgram');
 const { spawn, execSync } = require('child_process');
 const { WebSocketServer, WebSocket } = require('ws');
 
@@ -265,6 +266,72 @@ async function fetchRecommendedQueue(title, artist) {
 }
 
 // -------------------------------------------------------------
+// SENKRONİZE ŞARKI SÖZLERİ ÇÖZÜCÜ (LRCLIB API)
+// -------------------------------------------------------------
+const lyricsCache = new Map();
+
+async function fetchLyrics(title, artist) {
+  if (!title || title.includes('Bekleniyor') || title.includes('Bilinmiyor') || title === 'Boşta') return null;
+  const cleanTitle = title.replace(/\(.*?\)|\[.*?\]/g, '').replace(/feat\..*/i, '').trim();
+  const cleanArtist = (artist && !artist.includes('YouTube') && !artist.includes('Spotify')) ? artist.trim() : '';
+  const cacheKey = `${cleanTitle}|${cleanArtist}`.toLowerCase();
+
+  if (lyricsCache.has(cacheKey)) {
+    return lyricsCache.get(cacheKey);
+  }
+
+  try {
+    const query = new URLSearchParams({ track_name: cleanTitle });
+    if (cleanArtist) query.append('artist_name', cleanArtist);
+    const url = `https://lrclib.net/api/get?${query.toString()}`;
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'MusicBridge-Core/2.0 (Eren Teknoloji)' },
+      signal: AbortSignal.timeout(3500)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const result = {
+        title: data.trackName || cleanTitle,
+        artist: data.artistName || cleanArtist,
+        plainLyrics: data.plainLyrics || '',
+        syncedLyrics: data.syncedLyrics || '',
+        instrumental: !!data.instrumental
+      };
+      lyricsCache.set(cacheKey, result);
+      return result;
+    }
+  } catch (e) {}
+  return null;
+}
+
+// -------------------------------------------------------------
+// SIFIR-KONFİGÜRASYON UDP AĞ KEŞFİ (AUTO-DISCOVERY ENGINE)
+// -------------------------------------------------------------
+const DISCOVERY_PORT = 8766;
+function startUdpDiscoveryServer() {
+  try {
+    const udpServer = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+    udpServer.on('error', err => {
+      // Port kullanımda olabilir veya izin kısıtı, sessizce geç
+    });
+
+    udpServer.on('message', (msg, rinfo) => {
+      const text = msg.toString('utf8').trim();
+      if (text.startsWith('MUSICBRIDGE_DISCOVERY_PING')) {
+        const hostName = os.hostname();
+        const responseMsg = `MUSICBRIDGE_DISCOVERY_PONG|${PORT}|${hostName}`;
+        udpServer.send(responseMsg, rinfo.port, rinfo.address, () => {});
+      }
+    });
+
+    udpServer.bind(DISCOVERY_PORT, '0.0.0.0', () => {
+      try { udpServer.setBroadcast(true); } catch (_) {}
+      console.log(`📡 Otomatik Cihaz Keşif Motoru (UDP Discovery :${DISCOVERY_PORT}) Devrede!`);
+    });
+  } catch (err) {}
+}
+
+// -------------------------------------------------------------
 // YEREL WINDOWS MEDYA VE SES KÖPRÜSÜ (GSMTC & CoreAudio)
 // -------------------------------------------------------------
 let psProcess = null;
@@ -448,6 +515,65 @@ const server = http.createServer((req, res) => {
     setTimeout(() => {
       process.exit(0);
     }, 500);
+    return;
+  }
+
+  // Albüm Kapağı Akışı (Base64 yerine doğrudan Binary HTTP Servisi)
+  if (url.pathname === '/api/artwork') {
+    if (currentState.artwork && currentState.artwork.startsWith('data:image/')) {
+      try {
+        const matches = currentState.artwork.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        if (matches && matches.length === 3) {
+          const mimeType = matches[1];
+          const buffer = Buffer.from(matches[2], 'base64');
+          res.writeHead(200, {
+            'Content-Type': mimeType,
+            'Content-Length': buffer.length,
+            'Cache-Control': 'no-cache, max-age=0'
+          });
+          res.end(buffer);
+          return;
+        }
+      } catch (_) {}
+    } else if (currentState.artwork && currentState.artwork.startsWith('http')) {
+      res.writeHead(302, { 'Location': currentState.artwork });
+      res.end();
+      return;
+    }
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Kapak görseli yok');
+    return;
+  }
+
+  // Senkronize Şarkı Sözleri (LRCLIB API)
+  if (url.pathname === '/api/lyrics') {
+    const title = url.searchParams.get('title') || currentState.title;
+    const artist = url.searchParams.get('artist') || currentState.artist;
+    fetchLyrics(title, artist)
+      .then(lyrics => {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({
+          success: true,
+          lyrics: lyrics || { plainLyrics: 'Şarkı sözü bulunamadı.', syncedLyrics: '' }
+        }));
+      })
+      .catch(err => {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: err.message }));
+      });
+    return;
+  }
+
+  // Sıfır-Konfigürasyon Keşif Bilgisi
+  if (url.pathname === '/api/discovery') {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({
+      service: 'musicbridge',
+      version: '2.0.0',
+      port: PORT,
+      hostname: os.hostname(),
+      ips: getNetworkIps()
+    }));
     return;
   }
 
@@ -665,4 +791,7 @@ server.listen(PORT, '0.0.0.0', () => {
 
   // Windows yerel medya köprüsünü başlat
   startWindowsMediaBridge();
+
+  // Sıfır-konfigürasyon otomatik cihaz keşfini başlat (UDP port 8766)
+  startUdpDiscoveryServer();
 });

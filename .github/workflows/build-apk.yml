@@ -38,11 +38,11 @@ jobs:
     - name: APK Dosyasini Yayina Hazirla
       run: |
         mkdir -p release-output
-        cp Android-MicroShell/app/build/outputs/apk/debug/app-debug.apk release-output/MusicBridge-v1.0.0.apk
+        cp Android-MicroShell/app/build/outputs/apk/debug/app-debug.apk release-output/MusicBridge-v2.0.0.apk
 
     - name: APK Dosyasini Artifact Olarak Yukle
       uses: actions/upload-artifact@v4
       with:
-        name: MusicBridge-v1.0.0-APK
-        path: release-output/MusicBridge-v1.0.0.apk
+        name: MusicBridge-v2.0.0-APK
+        path: release-output/MusicBridge-v2.0.0.apk
         retention-days: 30

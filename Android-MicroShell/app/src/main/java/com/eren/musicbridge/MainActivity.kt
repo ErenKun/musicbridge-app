@@ -26,6 +26,9 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Android 13+ bildirim ve cagri izinlerini kontrol et (Android 9'da sessizce atlanir)
+        checkModernPermissions()
+
         // Arka Plan Servisini Baslat (Akilli Saat & Kilit Ekrani)
         val serviceIntent = Intent(this, MediaBridgeService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -70,10 +73,71 @@ class MainActivity : AppCompatActivity() {
         val savedUrl = prefs.getString(KEY_SERVER_URL, "")
 
         if (savedUrl.isNullOrBlank()) {
-            showServerConfigDialog()
+            // Kayitli IP yoksa once yerel agi otomatik tara, bulunamazsa dialog goster
+            discoverPcOnLan { foundUrl ->
+                if (!foundUrl.isNullOrBlank()) {
+                    prefs.edit().putString(KEY_SERVER_URL, foundUrl).apply()
+                    loadServer(foundUrl)
+                } else {
+                    showServerConfigDialog()
+                }
+            }
         } else {
             loadServer(savedUrl)
         }
+    }
+
+    private fun checkModernPermissions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val permissionsToRequest = mutableListOf<String>()
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                permissionsToRequest.add(android.Manifest.permission.POST_NOTIFICATIONS)
+            }
+            if (checkSelfPermission(android.Manifest.permission.READ_PHONE_STATE) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                permissionsToRequest.add(android.Manifest.permission.READ_PHONE_STATE)
+            }
+            if (permissionsToRequest.isNotEmpty()) {
+                requestPermissions(permissionsToRequest.toTypedArray(), 1001)
+            }
+        }
+    }
+
+    /**
+     * Sifir konfigürasyonlu yerel ag taramasi (UDP Discovery)
+     */
+    fun discoverPcOnLan(callback: (String?) -> Unit) {
+        Thread {
+            var foundUrl: String? = null
+            try {
+                val socket = java.net.DatagramSocket()
+                socket.broadcast = true
+                socket.soTimeout = 1800
+
+                val sendData = "MUSICBRIDGE_DISCOVERY_PING".toByteArray(Charsets.UTF_8)
+                val broadcastAddress = java.net.InetAddress.getByName("255.255.255.255")
+                val sendPacket = java.net.DatagramPacket(sendData, sendData.size, broadcastAddress, 8766)
+                socket.send(sendPacket)
+
+                val buffer = ByteArray(512)
+                val receivePacket = java.net.DatagramPacket(buffer, buffer.size)
+                socket.receive(receivePacket)
+
+                val response = String(receivePacket.data, 0, receivePacket.length, Charsets.UTF_8).trim()
+                if (response.startsWith("MUSICBRIDGE_DISCOVERY_PONG")) {
+                    val parts = response.split("|")
+                    val port = if (parts.size > 1) parts[1] else "8765"
+                    val senderIp = receivePacket.address.hostAddress
+                    foundUrl = "http://$senderIp:$port"
+                }
+                socket.close()
+            } catch (e: Exception) {
+                // Zaman asimi veya agda yayin desteklenmiyor
+            }
+
+            runOnUiThread {
+                callback(foundUrl)
+            }
+        }.start()
     }
 
     private fun loadServer(url: String) {
@@ -127,6 +191,19 @@ class MainActivity : AppCompatActivity() {
                 if (newUrl.isNotBlank()) {
                     prefs.edit().putString(KEY_SERVER_URL, newUrl).apply()
                     loadServer(newUrl)
+                }
+            }
+            .setNeutralButton("🔍 PC'yi Otomatik Bul") { _, _ ->
+                android.widget.Toast.makeText(this, "Ağdaki PC taranıyor...", android.widget.Toast.LENGTH_SHORT).show()
+                discoverPcOnLan { foundUrl ->
+                    if (!foundUrl.isNullOrBlank()) {
+                        prefs.edit().putString(KEY_SERVER_URL, foundUrl).apply()
+                        loadServer(foundUrl)
+                        android.widget.Toast.makeText(this, "Bağlandı: $foundUrl", android.widget.Toast.LENGTH_SHORT).show()
+                    } else {
+                        android.widget.Toast.makeText(this, "PC bulunamadı. Lütfen IP adresini elle girin.", android.widget.Toast.LENGTH_LONG).show()
+                        showServerConfigDialog()
+                    }
                 }
             }
             .setCancelable(false)

@@ -1,4 +1,4 @@
-﻿# MusicBridge - Yerel Windows Medya ve Ses Denetim Köprüsü (GSMTC & CoreAudio)
+# MusicBridge - Yerel Windows Medya ve Ses Denetim Köprüsü (GSMTC & CoreAudio)
 # Eren Teknoloji - 2026
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -145,6 +145,7 @@ $selectedSessionIndex = -1
 $pinnedSource = "auto"
 $resolvedIndex = 0
 $lastArtKey = ""
+$lastSentArtKey = ""
 $cachedArtB64 = ""
 $artRetryCount = 0
 
@@ -325,6 +326,7 @@ while ($true) {
             $artKey = "$title|$artist"
             if ($artKey -ne $lastArtKey) {
                 $lastArtKey = $artKey
+                $lastSentArtKey = ""
                 $cachedArtB64 = ""
                 $artRetryCount = 0
             }
@@ -340,6 +342,8 @@ while ($true) {
                             $mem = New-Object System.IO.MemoryStream
                             $netStream.CopyTo($mem)
                             $bytes = $mem.ToArray()
+                            $mem.Dispose()
+                            $netStream.Dispose()
                             if ($bytes.Length -gt 0) {
                                 $mime = if ($stream.ContentType) { $stream.ContentType } else { "image/jpeg" }
                                 $cachedArtB64 = "data:$mime;base64," + [Convert]::ToBase64String($bytes)
@@ -347,6 +351,13 @@ while ($true) {
                         }
                     } catch {}
                 }
+            }
+
+            # Kapağı her döngüde değil, yalnızca ilk yüklendiğinde veya değiştiğinde gönder (I/O ve CPU tasarrufu)
+            $artPayload = $null
+            if ($artKey -ne $lastSentArtKey -and (-not [string]::IsNullOrEmpty($cachedArtB64))) {
+                $artPayload = $cachedArtB64
+                $lastSentArtKey = $artKey
             }
 
             $isPlaying = ($playback -and $playback.PlaybackStatus -eq [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionPlaybackStatus]::Playing)
@@ -373,7 +384,7 @@ while ($true) {
                 title = $title
                 artist = $artist
                 album = $album
-                artwork = $cachedArtB64
+                artwork = $artPayload
                 isPlaying = $isPlaying
                 currentTime = $curSec
                 duration = $durSec
@@ -387,6 +398,8 @@ while ($true) {
             Send-JsonPayload $payload
         } else {
             # Oynatıcı kapalı veya duraklatılmış, ancak ses seviyesi hala aktiftir
+            $lastSentArtKey = ""
+            $cachedArtB64 = ""
             $payload = @{
                 type = "media"
                 title = "M$([char]0x00FC)zik Bekleniyor..."
@@ -407,5 +420,5 @@ while ($true) {
         }
     } catch {}
 
-    Start-Sleep -Milliseconds 150
+    Start-Sleep -Milliseconds 200
 }

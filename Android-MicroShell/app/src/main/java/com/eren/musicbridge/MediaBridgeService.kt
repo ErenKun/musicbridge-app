@@ -37,6 +37,9 @@ class MediaBridgeService : Service() {
     private var lastTitle: String = ""
     private var lastArtist: String = ""
     private var lastIsPlaying: Boolean = false
+    private var wasPlayingBeforeCall: Boolean = false
+    private var telephonyManager: android.telephony.TelephonyManager? = null
+    private var phoneStateListener: android.telephony.PhoneStateListener? = null
 
     companion object {
         const val CHANNEL_ID = "musicbridge_playback_channel"
@@ -68,6 +71,9 @@ class MediaBridgeService : Service() {
         createNotificationChannel()
         initMediaSession()
         startForeground(NOTIFICATION_ID, buildNotification("MusicBridge", "PC'ye baglaniyor..."))
+
+        // Akilli cagri duraklatma dinleyicisini baslat
+        initCallStateListener()
 
         // Arka planda baglanti ve sarki senkronizasyonunu baslat (Pil dostu)
         startBackgroundSync()
@@ -260,18 +266,56 @@ class MediaBridgeService : Service() {
     }
 
     /**
+     * Telefon caldiginda muzigi otomatik duraklatir, gorusme bitince devam ettirir (Smart Auto-Pause).
+     */
+    @Suppress("DEPRECATION")
+    private fun initCallStateListener() {
+        try {
+            telephonyManager = getSystemService(Context.TELEPHONY_SERVICE) as? android.telephony.TelephonyManager
+            phoneStateListener = object : android.telephony.PhoneStateListener() {
+                override fun onCallStateChanged(state: Int, phoneNumber: String?) {
+                    when (state) {
+                        android.telephony.TelephonyManager.CALL_STATE_RINGING,
+                        android.telephony.TelephonyManager.CALL_STATE_OFFHOOK -> {
+                            if (lastIsPlaying) {
+                                wasPlayingBeforeCall = true
+                                updatePlaybackStateOnly(false)
+                                sendMediaCommandToPc("pause")
+                            }
+                        }
+                        android.telephony.TelephonyManager.CALL_STATE_IDLE -> {
+                            if (wasPlayingBeforeCall) {
+                                wasPlayingBeforeCall = false
+                                updatePlaybackStateOnly(true)
+                                sendMediaCommandToPc("play")
+                            }
+                        }
+                    }
+                }
+            }
+            phoneStateListener?.let {
+                telephonyManager?.listen(it, android.telephony.PhoneStateListener.LISTEN_CALL_STATE)
+            }
+        } catch (e: Exception) {
+            // İzin verilmemisse veya desteksizse sessizce gec
+        }
+    }
+
+    /**
      * Telefon kilitliyken veya uygulama kapaliyken Akilli Saat ve Bildirim senkronizasyonunu
-     * son derece dusuk pil tuketimiyle guncel tutar.
+     * son derece dusuk pil tuketimiyle guncel tutar (Akilli Backoff).
      */
     private fun startBackgroundSync() {
         backgroundSyncJob?.cancel()
         backgroundSyncJob = scope.launch {
+            var failureCount = 0
             while (isActive) {
+                var isSuccess = false
                 try {
                     val url = URL("$serverBaseUrl/api/status")
                     val conn = url.openConnection() as HttpURLConnection
-                    conn.connectTimeout = 2000
-                    conn.readTimeout = 2000
+                    conn.connectTimeout = 1800
+                    conn.readTimeout = 1800
                     conn.requestMethod = "GET"
 
                     if (conn.responseCode == 200) {
@@ -287,6 +331,7 @@ class MediaBridgeService : Service() {
                             if (title != lastTitle || artist != lastArtist || isPlaying != lastIsPlaying) {
                                 updateTrackInfo(title, artist, duration, isPlaying)
                             }
+                            isSuccess = true
                         }
                     }
                     conn.disconnect()
@@ -294,8 +339,14 @@ class MediaBridgeService : Service() {
                     // PC kapaliysa veya ag yoksa
                 }
 
-                // Muzik caliyorsa 2 sn, calmiyorsa 4 sn bekle (Sifira yakin pil kullanimi)
-                delay(if (lastIsPlaying) 2000L else 4000L)
+                if (isSuccess) {
+                    failureCount = 0
+                    delay(if (lastIsPlaying) 2000L else 4000L)
+                } else {
+                    failureCount++
+                    val backoffDelay = (2000L + (failureCount * 1000L)).coerceAtMost(8000L)
+                    delay(backoffDelay)
+                }
             }
         }
     }
@@ -326,9 +377,15 @@ class MediaBridgeService : Service() {
             .build()
     }
 
+    @Suppress("DEPRECATION")
     override fun onDestroy() {
         instance = null
         backgroundSyncJob?.cancel()
+        try {
+            phoneStateListener?.let {
+                telephonyManager?.listen(it, android.telephony.PhoneStateListener.LISTEN_NONE)
+            }
+        } catch (e: Exception) {}
         mediaSession.isActive = false
         mediaSession.release()
         super.onDestroy()

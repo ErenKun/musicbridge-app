@@ -1140,3 +1140,102 @@ input:checked + .slider:before {
   background: rgba(255, 255, 255, 0.12);
   color: var(--text-main);
 }
+
+/* ============================================================
+   ŞARKI SÖZLERİ (LYRICS VIEW) STİLLERİ
+   ============================================================ */
+.lyrics-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.lyrics-header h3 {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.lyrics-badge {
+  font-size: 0.72rem;
+  padding: 3px 8px;
+  border-radius: 20px;
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  font-weight: 600;
+  display: inline-block;
+  margin-top: 2px;
+}
+
+.lyrics-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  min-height: 380px;
+  max-height: 60vh;
+}
+
+.lyrics-song-info {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lyrics-song-info strong {
+  font-size: 1.05rem;
+  color: var(--text-main);
+}
+
+.lyrics-song-info span {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.lyrics-container {
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 6px;
+  scroll-behavior: smooth;
+}
+
+.lyrics-line {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+  transition: all 0.25s ease;
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+
+.lyrics-line.active {
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 1.08rem;
+  background: rgba(99, 102, 241, 0.2);
+  border-left: 3px solid var(--accent);
+  transform: translateX(4px);
+}
+
+.lyrics-plain {
+  font-size: 0.92rem;
+  line-height: 1.8;
+  color: var(--text-main);
+  white-space: pre-line;
+}
+
+.lyrics-loading, .lyrics-empty {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin: auto;
+  padding: 30px 10px;
+}
