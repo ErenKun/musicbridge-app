@@ -57,6 +57,13 @@
         if (prevBtn) prevBtn.click();
       } else if (action === 'seekTo') {
         video.currentTime = Number(data);
+      } else if (action === 'seekToQueueIndex') {
+        const queueItems = document.querySelectorAll('ytmusic-player-queue-item');
+        if (queueItems && queueItems[Number(data)]) {
+          const target = queueItems[Number(data)];
+          const playBtn = target.querySelector('.play-button') || target;
+          playBtn.click();
+        }
       }
     }
 
@@ -89,6 +96,27 @@
     }
   }
 
+  // YouTube Music Çalma Listesini ve Kuyruğunu Çek
+  function extractYtQueue() {
+    const items = [];
+    const queueElements = document.querySelectorAll('ytmusic-player-queue-item');
+    queueElements.forEach((el, index) => {
+      const titleEl = el.querySelector('.song-title, .title');
+      const artistEl = el.querySelector('.byline');
+      const durEl = el.querySelector('.duration');
+      if (titleEl && titleEl.textContent.trim()) {
+        items.push({
+          index,
+          title: titleEl.textContent.trim(),
+          artist: artistEl ? artistEl.textContent.trim() : '',
+          duration: durEl ? durEl.textContent.trim() : '',
+          isRecommendation: false
+        });
+      }
+    });
+    return items;
+  }
+
   // Durumu PC-Core'a Düzenli İlet (1 sn periyot)
   setInterval(() => {
     const host = window.location.hostname;
@@ -107,6 +135,8 @@
           art = art.replace(/=w\d+-h\d+[^=]*/, '=w600-h600-l90-rj').replace(/=s\d+[^=]*/, '=s800');
         }
 
+        const queueList = extractYtQueue();
+
         trackInfo = {
           title: titleEl.textContent.trim(),
           artist: artistEl ? artistEl.textContent.trim() : 'YouTube Music',
@@ -116,6 +146,7 @@
           duration: Math.floor(video.duration || 0),
           volume: Math.round(video.volume * 100),
           artwork: art,
+          queue: queueList.length > 0 ? queueList : undefined,
           sourceApp: 'YouTube Music'
         };
       }
