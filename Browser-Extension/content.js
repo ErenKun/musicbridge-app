@@ -59,9 +59,13 @@
         video.currentTime = Number(data);
       } else if (action === 'seekToQueueIndex') {
         const queueItems = document.querySelectorAll('ytmusic-player-queue-item');
-        if (queueItems && queueItems[Number(data)]) {
-          const target = queueItems[Number(data)];
-          const playBtn = target.querySelector('.play-button') || target;
+        const targetIdx = Number(data);
+        if (queueItems && queueItems[targetIdx]) {
+          const target = queueItems[targetIdx];
+          try {
+            target.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          } catch (_) {}
+          const playBtn = target.querySelector('.play-button') || target.querySelector('tp-yt-paper-icon-button') || target;
           playBtn.click();
         }
       }
@@ -104,12 +108,19 @@
       const titleEl = el.querySelector('.song-title, .title');
       const artistEl = el.querySelector('.byline');
       const durEl = el.querySelector('.duration');
+      const isSelected = el.hasAttribute('selected') ||
+                         el.classList.contains('selected') ||
+                         el.getAttribute('play-button-state') === 'playing' ||
+                         el.getAttribute('play-button-state') === 'paused' ||
+                         !!el.querySelector('[aria-selected="true"]');
+
       if (titleEl && titleEl.textContent.trim()) {
         items.push({
           index,
           title: titleEl.textContent.trim(),
           artist: artistEl ? artistEl.textContent.trim() : '',
           duration: durEl ? durEl.textContent.trim() : '',
+          isCurrent: isSelected,
           isRecommendation: false
         });
       }

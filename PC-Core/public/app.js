@@ -435,36 +435,188 @@ function handleVolume(val) {
   }, 1000);
 }
 
+// -------------------------------------------------------------
+// AKILLI KUYRUK & ŞARKI LİSTESİ YÖNETİMİ
+// -------------------------------------------------------------
+let rawQueueItems = [];
+let queueFilterQuery = '';
+let currentQueueActiveIndex = -1;
+
+function filterQueue(query) {
+  queueFilterQuery = (query || '').trim().toLowerCase();
+  const clearBtn = document.getElementById('queue-search-clear');
+  if (clearBtn) {
+    clearBtn.style.display = queueFilterQuery ? 'inline-block' : 'none';
+  }
+  renderQueue(rawQueueItems);
+}
+
+function clearQueueSearch() {
+  const input = document.getElementById('queue-search-input');
+  if (input) input.value = '';
+  filterQueue('');
+}
+
+// Akıllı Kuyruk Atlama Algoritması (Extension + Smart Next/Prev Fallback)
+function jumpToQueueIndex(targetIdx) {
+  if (targetIdx === currentQueueActiveIndex) {
+    showToast('▶ Bu parça zaten şu anda çalıyor.');
+    return;
+  }
+
+  // 1. Tarayıcı eklentisine doğrudan indeks atlama komutu gönder
+  sendCmd('seekToQueueIndex', targetIdx);
+
+  // 2. Yerel Windows GSMTC / Medya Oynatıcı için akıllı çoklu adım mantığı (Fallback)
+  if (currentQueueActiveIndex !== -1) {
+    const diff = targetIdx - currentQueueActiveIndex;
+    if (diff > 0) {
+      showToast(`⏭ ${diff} parça ileri atlanıyor...`);
+      for (let i = 0; i < diff; i++) {
+        setTimeout(() => sendCmd('next'), i * 160);
+      }
+    } else if (diff < 0) {
+      const absDiff = Math.abs(diff);
+      // Eğer çalan şarkı 3 saniyeyi geçmişse, Windows/YTMusic ilk 'previous' komutunda
+      // şarkıyı sıfırlar (00:00). Önceki şarkıya geçmek için fazladan 1 tıklama gerekir!
+      const extraPress = (currentTrack.currentTime > 3) ? 1 : 0;
+      const totalPresses = absDiff + extraPress;
+      showToast(`⏮ ${absDiff} parça geri gidiliyor...`);
+      for (let i = 0; i < totalPresses; i++) {
+        setTimeout(() => sendCmd('previous'), i * 160);
+      }
+    }
+  } else {
+    showToast('Parçaya atlanıyor...');
+  }
+}
+
 // Kuyruk Render
 function renderQueue(queueItems) {
+  rawQueueItems = Array.isArray(queueItems) ? queueItems : [];
   const container = document.getElementById('queue-list');
   const countEl = document.getElementById('queue-count');
   const badgeEl = document.getElementById('queue-type-badge');
 
-  if (!queueItems || queueItems.length === 0) {
+  if (!rawQueueItems || rawQueueItems.length === 0) {
     container.innerHTML = '<p class="empty-state">Kuyrukta şarkı yok veya oynatıcı kapalı.</p>';
     countEl.innerText = '0 Parça';
     if (badgeEl) badgeEl.innerText = 'Boş';
+    currentQueueActiveIndex = -1;
     return;
   }
 
-  const isRec = queueItems[0]?.isRecommendation;
+  const isRec = rawQueueItems[0]?.isRecommendation;
   if (badgeEl) {
     badgeEl.innerText = isRec ? '💡 Önerilenler' : '🎵 Oynatma Kuyruğu';
     badgeEl.style.background = isRec ? 'rgba(245, 158, 11, 0.15)' : 'rgba(99, 102, 241, 0.2)';
     badgeEl.style.color = isRec ? '#f59e0b' : '#818cf8';
   }
 
-  countEl.innerText = `${queueItems.length} Parça`;
-  container.innerHTML = queueItems.map((item, idx) => `
-    <div class="queue-item" onclick="sendCmd('seekToQueueIndex', ${idx})">
-      <div>
-        <div class="queue-item-title">${escapeHtml(item.title || 'İsimsiz')}</div>
-        <div class="queue-item-sub">${escapeHtml(item.artist || 'Bilinmiyor')}</div>
+  // 1. Yinelenen parçaları temizle (Peş peşe gelen birebir aynı kayıtlar)
+  const deduplicated = [];
+  for (let i = 0; i < rawQueueItems.length; i++) {
+    const item = rawQueueItems[i];
+    const prev = deduplicated[deduplicated.length - 1];
+    if (prev && prev.title && item.title &&
+        prev.title.trim().toLowerCase() === item.title.trim().toLowerCase() &&
+        (prev.artist || '').trim().toLowerCase() === (item.artist || '').trim().toLowerCase()) {
+      continue; // Yineleneni filtrele
+    }
+    deduplicated.push({ ...item, originalIndex: i });
+  }
+
+  // 2. Şu an çalan şarkının kuyruktaki yerini tespit et
+  const curTitle = (currentTrack.title || '').trim().toLowerCase();
+  const curArtist = (currentTrack.artist || '').trim().toLowerCase();
+  currentQueueActiveIndex = -1;
+
+  // Öncelik 1: Eklentinin bildirdiği isCurrent bayrağı
+  let foundIdx = deduplicated.findIndex(it => it.isCurrent);
+
+  // Öncelik 2: Birebir başlık & sanatçı eşleşmesi
+  if (foundIdx === -1 && curTitle && !curTitle.includes('bekleniyor')) {
+    foundIdx = deduplicated.findIndex(it => {
+      const t = (it.title || '').trim().toLowerCase();
+      const a = (it.artist || '').trim().toLowerCase();
+      return (t === curTitle && (!curArtist || !a || a.includes(curArtist) || curArtist.includes(a)));
+    });
+  }
+
+  // Öncelik 3: Kısmi başlık eşleşmesi
+  if (foundIdx === -1 && curTitle && !curTitle.includes('bekleniyor')) {
+    foundIdx = deduplicated.findIndex(it => {
+      const t = (it.title || '').trim().toLowerCase();
+      return t && (curTitle.includes(t) || t.includes(curTitle));
+    });
+  }
+
+  if (foundIdx !== -1) {
+    currentQueueActiveIndex = deduplicated[foundIdx].originalIndex;
+  }
+
+  // 3. Arama Filtresi Uygula
+  let displayItems = deduplicated;
+  if (queueFilterQuery) {
+    displayItems = deduplicated.filter(it => {
+      const t = (it.title || '').toLowerCase();
+      const a = (it.artist || '').toLowerCase();
+      return t.includes(queueFilterQuery) || a.includes(queueFilterQuery);
+    });
+  }
+
+  countEl.innerText = `${displayItems.length} Parça`;
+
+  if (displayItems.length === 0) {
+    container.innerHTML = '<p class="empty-state">Aramanızla eşleşen parça bulunamadı.</p>';
+    return;
+  }
+
+  container.innerHTML = displayItems.map(item => {
+    const isPlaying = (foundIdx !== -1 && deduplicated[foundIdx] === item);
+    const targetIndex = item.originalIndex;
+    const durationStr = item.duration ? (typeof item.duration === 'number' ? formatTime(item.duration) : item.duration) : '';
+
+    // Bağıl konum hesapla (+1 sonra, -2 önce vb.)
+    let offsetBadge = '';
+    if (foundIdx !== -1 && !isPlaying) {
+      const offset = targetIndex - currentQueueActiveIndex;
+      if (offset > 0) {
+        offsetBadge = `<span class="queue-offset-badge next-track">+${offset} Sonra</span>`;
+      } else if (offset < 0) {
+        offsetBadge = `<span class="queue-offset-badge prev-track">${offset} Önce</span>`;
+      }
+    }
+
+    return `
+      <div class="queue-item ${isPlaying ? 'playing' : ''}" onclick="jumpToQueueIndex(${targetIndex})" title="${isPlaying ? 'Şu an çalıyor' : 'Bu parçaya atlamak için tıklayın'}">
+        <div class="queue-item-left">
+          <span class="queue-index-badge">${targetIndex + 1}</span>
+          <div class="eq-bars">
+            <span class="eq-bar eq-bar-1"></span>
+            <span class="eq-bar eq-bar-2"></span>
+            <span class="eq-bar eq-bar-3"></span>
+          </div>
+          <div class="queue-item-details">
+            <div class="queue-item-title-row">
+              <span class="queue-item-title">${escapeHtml(item.title || 'İsimsiz')}</span>
+              ${isPlaying ? '<span class="now-playing-tag">▶ Çalıyor</span>' : ''}
+            </div>
+            <div class="queue-item-sub">${escapeHtml(item.artist || 'Bilinmiyor')}</div>
+          </div>
+        </div>
+        <div class="queue-item-right">
+          ${offsetBadge}
+          ${durationStr ? `<span class="queue-duration">${durationStr}</span>` : ''}
+          ${!isPlaying ? `
+            <button class="btn-jump" onclick="event.stopPropagation(); jumpToQueueIndex(${targetIndex})" title="Bu parçaya atla">
+              ▶ Atla
+            </button>
+          ` : ''}
+        </div>
       </div>
-      <span class="queue-item-sub">${item.duration ? (typeof item.duration === 'number' ? formatTime(item.duration) : item.duration) : ''}</span>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 }
 
 function escapeHtml(text) {
@@ -1002,13 +1154,65 @@ function closeTailscaleGuideModal(event) {
 }
 
 // -------------------------------------------------------------
+// AKILLI SAAT & TELEFON DONANIM SES SENKRONİZASYONU
+// -------------------------------------------------------------
+let isVolumeSyncEnabled = false;
+
+function initVolumeSync() {
+  if (window.ErenBridge && typeof window.ErenBridge.isVolumeSyncEnabled === 'function') {
+    try {
+      isVolumeSyncEnabled = !!window.ErenBridge.isVolumeSyncEnabled();
+    } catch (e) {
+      isVolumeSyncEnabled = localStorage.getItem('mb_vol_sync') === 'true';
+    }
+  } else {
+    isVolumeSyncEnabled = localStorage.getItem('mb_vol_sync') === 'true';
+  }
+  updateVolumeSyncUI();
+}
+
+function toggleVolumeSync() {
+  isVolumeSyncEnabled = !isVolumeSyncEnabled;
+  localStorage.setItem('mb_vol_sync', isVolumeSyncEnabled ? 'true' : 'false');
+  if (window.ErenBridge && typeof window.ErenBridge.setVolumeSyncEnabled === 'function') {
+    try {
+      window.ErenBridge.setVolumeSyncEnabled(isVolumeSyncEnabled);
+    } catch (e) {}
+  }
+  updateVolumeSyncUI();
+  if (isVolumeSyncEnabled) {
+    showToast('⌚ Ses Senkronu Açık: Telefon & Saat sesi PC ana sesini yönetir');
+  } else {
+    showToast('⌚ Ses Senkronu Kapatıldı');
+  }
+}
+
+function updateVolumeSyncUI() {
+  const btn = document.getElementById('vol-sync-btn');
+  const text = document.getElementById('vol-sync-text');
+  if (!btn) return;
+  if (isVolumeSyncEnabled) {
+    btn.classList.add('active');
+    if (text) text.innerText = 'Ses Senk: Açık';
+    btn.title = 'Akıllı Saat / Telefon Ses Senkronu: Açık (Kapatmak için tıklayın)';
+  } else {
+    btn.classList.remove('active');
+    if (text) text.innerText = 'Ses Senk: Kapalı';
+    btn.title = 'Akıllı Saat / Telefon Ses Senkronu: Kapalı (Açmak için tıklayın)';
+  }
+}
+
+// -------------------------------------------------------------
 // YAŞAM DÖNGÜSÜ (LIFECYCLE) & ARKA PLANDAN ÖN PLANA DÖNÜŞ KONTROLLERİ
 // -------------------------------------------------------------
 window.onAppResume = function() {
   // 1. HTTP REST ile anında son durumu çek ve arayüzü güncelle (0 gecikme)
   fetchCurrentState();
 
-  // 2. WebSocket bağlantısının sağlığını kontrol et / zombiyse anında yenile
+  // 2. Ses Senkron durumunu tazele
+  initVolumeSync();
+
+  // 3. WebSocket bağlantısının sağlığını kontrol et / zombiyse anında yenile
   const timeSinceLastMsg = performance.now() - lastWsMessageTime;
   if (!ws || ws.readyState !== WebSocket.OPEN || timeSinceLastMsg > 8000) {
     connectWebSocket(true);
@@ -1020,7 +1224,7 @@ window.onAppResume = function() {
     }
   }
 
-  // 3. İlerleme sayacını yeniden canlandır
+  // 4. İlerleme sayacını yeniden canlandır
   startProgressTimer();
 };
 
@@ -1068,6 +1272,7 @@ setInterval(() => {
 // Başlat
 window.addEventListener('DOMContentLoaded', () => {
   fetchCurrentState(); // Sayfa açılır açılmaz anında ilk veriyi getir
+  initVolumeSync();    // Donanım / Akıllı saat ses senkronu butonunu yükle
   connectWebSocket();
   startProgressTimer();
   setupMarquee('title-marquee-container', document.getElementById('track-title'));

@@ -49,4 +49,20 @@ class ErenBridge(private val context: Context) {
         val prefs = context.getSharedPreferences("MusicBridgePrefs", Context.MODE_PRIVATE)
         return prefs.getString("server_url", "") ?: ""
     }
+
+    /**
+     * Akilli saat ve telefon donanim ses senkronu durumu
+     */
+    @JavascriptInterface
+    fun isVolumeSyncEnabled(): Boolean {
+        val prefs = context.getSharedPreferences("MusicBridgePrefs", Context.MODE_PRIVATE)
+        return prefs.getBoolean("volume_sync_enabled", false)
+    }
+
+    @JavascriptInterface
+    fun setVolumeSyncEnabled(enabled: Boolean) {
+        val prefs = context.getSharedPreferences("MusicBridgePrefs", Context.MODE_PRIVATE)
+        prefs.edit().putBoolean("volume_sync_enabled", enabled).apply()
+        MediaBridgeService.instance?.setVolumeSyncEnabled(enabled)
+    }
 }

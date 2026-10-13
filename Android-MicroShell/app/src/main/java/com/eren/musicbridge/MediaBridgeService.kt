@@ -75,6 +75,11 @@ class MediaBridgeService : Service() {
         // Akilli cagri duraklatma dinleyicisini baslat
         initCallStateListener()
 
+        // Donanim & akilli saat ses senkronu durumunu yukle
+        if (prefs.getBoolean("volume_sync_enabled", false)) {
+            setVolumeSyncEnabled(true)
+        }
+
         // Arka planda baglanti ve sarki senkronizasyonunu baslat (Pil dostu)
         startBackgroundSync()
     }
@@ -234,7 +239,7 @@ class MediaBridgeService : Service() {
      * Uygulama kapaliyken veya ekran kilitliyken Android'in Doze moduna takilmamasi icin
      * sadece istek suresince gecici (max 3 sn) bir Partial WakeLock alir.
      */
-    private fun sendMediaCommandToPc(action: String) {
+    fun sendMediaCommandToPc(action: String, data: Any? = null) {
         scope.launch {
             val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
             val wakeLock = powerManager?.newWakeLock(
@@ -251,7 +256,11 @@ class MediaBridgeService : Service() {
                 conn.connectTimeout = 2000
                 conn.readTimeout = 2000
 
-                val body = "{\"action\":\"$action\"}"
+                val body = if (data != null) {
+                    "{\"action\":\"$action\",\"data\":$data}"
+                } else {
+                    "{\"action\":\"$action\"}"
+                }
                 OutputStreamWriter(conn.outputStream).use { it.write(body) }
                 conn.responseCode
                 conn.disconnect()
@@ -261,6 +270,61 @@ class MediaBridgeService : Service() {
                 if (wakeLock?.isHeld == true) {
                     try { wakeLock.release() } catch (e: Exception) {}
                 }
+            }
+        }
+    }
+
+    private var isVolumeSyncEnabled = false
+    private var volumeReceiver: android.content.BroadcastReceiver? = null
+    private var lastVolumeSentTime = 0L
+
+    fun setVolumeSyncEnabled(enabled: Boolean) {
+        isVolumeSyncEnabled = enabled
+        if (enabled) {
+            registerVolumeReceiver()
+        } else {
+            unregisterVolumeReceiver()
+        }
+    }
+
+    private fun registerVolumeReceiver() {
+        if (volumeReceiver != null) return
+        volumeReceiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == "android.media.VOLUME_CHANGED_ACTION") {
+                    val streamType = intent.getIntExtra("android.media.EXTRA_VOLUME_STREAM_TYPE", -1)
+                    if (streamType == android.media.AudioManager.STREAM_MUSIC) {
+                        val now = System.currentTimeMillis()
+                        // 120ms debounce (saat cevirmesinde veya seri tus basiminda agi tıkamaz)
+                        if (now - lastVolumeSentTime > 120) {
+                            lastVolumeSentTime = now
+                            syncHardwareVolumeToPc()
+                        }
+                    }
+                }
+            }
+        }
+        val filter = android.content.IntentFilter("android.media.VOLUME_CHANGED_ACTION")
+        try {
+            registerReceiver(volumeReceiver, filter)
+        } catch (e: Exception) {}
+    }
+
+    private fun unregisterVolumeReceiver() {
+        volumeReceiver?.let {
+            try { unregisterReceiver(it) } catch (e: Exception) {}
+            volumeReceiver = null
+        }
+    }
+
+    private fun syncHardwareVolumeToPc() {
+        val am = audioManager ?: (getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager)
+        if (am != null) {
+            val curr = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
+            val max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
+            if (max > 0) {
+                val percent = (curr * 100) / max
+                sendMediaCommandToPc("setVolume", percent)
             }
         }
     }
@@ -432,6 +496,7 @@ class MediaBridgeService : Service() {
             audioFocusChangeListener?.let {
                 audioManager?.abandonAudioFocus(it)
             }
+            unregisterVolumeReceiver()
         } catch (e: Exception) {}
         mediaSession.isActive = false
         mediaSession.release()

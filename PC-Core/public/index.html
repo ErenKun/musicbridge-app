@@ -14,9 +14,15 @@
         <span class="logo-dot"></span>
         <span class="brand-title">MusicBridge</span>
       </div>
-      <div class="connection-status" id="conn-badge" onclick="switchView('network-view')">
-        <span class="status-indicator"></span>
-        <span id="conn-text">Bağlanıyor...</span>
+      <div class="header-actions">
+        <button class="vol-sync-btn" id="vol-sync-btn" onclick="toggleVolumeSync()" title="Akıllı Saat & Telefon Ses Seviyesi Senkronizasyonu">
+          <span class="vol-sync-icon">⌚</span>
+          <span class="vol-sync-text" id="vol-sync-text">Ses Senk: Kapalı</span>
+        </button>
+        <div class="connection-status" id="conn-badge" onclick="switchView('network-view')">
+          <span class="status-indicator"></span>
+          <span id="conn-text">Bağlanıyor...</span>
+        </div>
       </div>
     </header>
 
@@ -159,6 +165,11 @@
           <span class="queue-count" id="queue-count">0 Parça</span>
           <button class="btn-icon" onclick="fetchStatus()" title="Yenile">🔄</button>
         </div>
+      </div>
+      <div class="queue-search-container">
+        <span class="queue-search-icon">🔍</span>
+        <input type="text" id="queue-search-input" class="queue-search-input" placeholder="Kuyrukta ara (şarkı veya sanatçı)..." oninput="filterQueue(this.value)">
+        <button class="queue-search-clear" id="queue-search-clear" onclick="clearQueueSearch()" style="display: none;">✕</button>
       </div>
       <div class="queue-list" id="queue-list">
         <p class="empty-state">Kuyruk bilgisi yükleniyor...</p>
