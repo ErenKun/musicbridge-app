@@ -265,11 +265,16 @@ class MediaBridgeService : Service() {
         }
     }
 
+    private var audioManager: android.media.AudioManager? = null
+    private var audioFocusChangeListener: android.media.AudioManager.OnAudioFocusChangeListener? = null
+
     /**
-     * Telefon caldiginda muzigi otomatik duraklatir, gorusme bitince devam ettirir (Smart Auto-Pause).
+     * Telefon caldiginda veya WhatsApp/VoIP aramasi geldiginde muzigi otomatik duraklatir,
+     * gorusme bitince devam ettirir (Smart Call & WhatsApp Auto-Pause).
      */
     @Suppress("DEPRECATION")
     private fun initCallStateListener() {
+        // 1. GSM Hücresel Arama Dinleyicisi
         try {
             telephonyManager = getSystemService(Context.TELEPHONY_SERVICE) as? android.telephony.TelephonyManager
             phoneStateListener = object : android.telephony.PhoneStateListener() {
@@ -296,9 +301,48 @@ class MediaBridgeService : Service() {
             phoneStateListener?.let {
                 telephonyManager?.listen(it, android.telephony.PhoneStateListener.LISTEN_CALL_STATE)
             }
-        } catch (e: Exception) {
-            // İzin verilmemisse veya desteksizse sessizce gec
-        }
+        } catch (e: Exception) {}
+
+        // 2. WhatsApp / Telegram / VoIP İnternet Aramaları Dinleyicisi (Ses Odağı)
+        try {
+            audioManager = getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+            audioFocusChangeListener = android.media.AudioManager.OnAudioFocusChangeListener { focusChange ->
+                when (focusChange) {
+                    android.media.AudioManager.AUDIOFOCUS_LOSS,
+                    android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
+                    android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                        // WhatsApp veya VoIP aramasi ses odagini aldi, muzigi duraklat
+                        if (lastIsPlaying) {
+                            wasPlayingBeforeCall = true
+                            updatePlaybackStateOnly(false)
+                            sendMediaCommandToPc("pause")
+                        }
+                    }
+                    android.media.AudioManager.AUDIOFOCUS_GAIN -> {
+                        // Arama bitti, ses odagi geri geldi
+                        if (wasPlayingBeforeCall) {
+                            wasPlayingBeforeCall = false
+                            updatePlaybackStateOnly(true)
+                            sendMediaCommandToPc("play")
+                        }
+                    }
+                }
+            }
+
+            // Baslangicta ses odagi dinleyicisini bagla
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val focusRequest = android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN)
+                    .setOnAudioFocusChangeListener(audioFocusChangeListener!!)
+                    .build()
+                audioManager?.requestAudioFocus(focusRequest)
+            } else {
+                audioManager?.requestAudioFocus(
+                    audioFocusChangeListener,
+                    android.media.AudioManager.STREAM_MUSIC,
+                    android.media.AudioManager.AUDIOFOCUS_GAIN
+                )
+            }
+        } catch (e: Exception) {}
     }
 
     /**
@@ -384,6 +428,9 @@ class MediaBridgeService : Service() {
         try {
             phoneStateListener?.let {
                 telephonyManager?.listen(it, android.telephony.PhoneStateListener.LISTEN_NONE)
+            }
+            audioFocusChangeListener?.let {
+                audioManager?.abandonAudioFocus(it)
             }
         } catch (e: Exception) {}
         mediaSession.isActive = false

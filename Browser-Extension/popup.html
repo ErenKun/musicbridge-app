@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-card">
+    <div class="popup-header">
+      <span class="logo-dot"></span>
+      <strong>MusicBridge</strong>
+      <span class="status-badge" id="status-badge">Bağlı</span>
+    </div>
+    <div class="track-box">
+      <div class="track-title" id="track-title">Müzik Bekleniyor...</div>
+      <div class="track-artist" id="track-artist">Tarayıcı Köprüsü Aktif</div>
+    </div>
+    <div class="controls-row">
+      <button class="btn-ctrl" id="btn-prev" title="Önceki">⏮</button>
+      <button class="btn-ctrl primary" id="btn-play" title="Oynat/Duraklat">⏯</button>
+      <button class="btn-ctrl" id="btn-next" title="Sonraki">⏭</button>
+    </div>
+    <div class="footer-info">
+      <span>PC Core: <code>localhost:8765</code></span>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

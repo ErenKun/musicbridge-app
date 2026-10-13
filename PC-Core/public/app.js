@@ -643,6 +643,11 @@ async function fetchNetworkStatus() {
         customInput.value = window.location.host;
       }
 
+      const pinEl = document.getElementById('net-pin');
+      if (pinEl && data.pin) {
+        pinEl.innerText = data.pin;
+      }
+
       renderQuickIps(data.network.lan, data.network.tailscale);
     }
 
@@ -968,6 +973,28 @@ function closeAboutModal(event) {
     return;
   }
   const modal = document.getElementById('about-modal');
+  if (modal) {
+    modal.classList.remove('show');
+    document.body.style.overflow = '';
+  }
+}
+
+// -------------------------------------------------------------
+// TAILSCALE KILAVUZ MODAL KONTROLÜ
+// -------------------------------------------------------------
+function openTailscaleGuideModal() {
+  const modal = document.getElementById('tailscale-modal');
+  if (modal) {
+    modal.classList.add('show');
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+function closeTailscaleGuideModal(event) {
+  if (event && event.target && event.target !== event.currentTarget && !event.target.classList.contains('guide-close-btn')) {
+    return;
+  }
+  const modal = document.getElementById('tailscale-modal');
   if (modal) {
     modal.classList.remove('show');
     document.body.style.overflow = '';

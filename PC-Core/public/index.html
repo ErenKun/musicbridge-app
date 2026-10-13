@@ -205,6 +205,10 @@
           <span>Akıllı Saat Köprüsü:</span>
           <strong class="text-emerald">Hazır (MediaSession)</strong>
         </div>
+        <div class="net-row">
+          <span>Güvenlik Eşleşme PIN:</span>
+          <strong id="net-pin" style="color: #818cf8; font-family: monospace; font-size: 1.05rem; letter-spacing: 2px;">----</strong>
+        </div>
       </div>
 
       <!-- Hızlı Bağlantı Değiştirme Butonları -->
@@ -246,8 +250,11 @@
       <div class="net-card">
         <h3>🌐 Tailscale ile Her Yerden Erişim</h3>
         <p class="help-text">
-          Tailscale VPN sayesinde evde olmasanız bile, mobil veri (4.5G/5G) üzerinden bilgisayarınızdaki müziği kesintisiz yönetebilirsiniz. PC ve telefonunuzda Tailscale açık olduğunda 100.x.x.x IP'siyle anında bağlanırsınız.
+          Tailscale VPN sayesinde evde olmasanız bile, mobil veri (4.5G/5G) üzerinden bilgisayarınızdaki müziği kesintisiz yönetebilirsiniz.
         </p>
+        <button class="btn-guide-trigger" onclick="openTailscaleGuideModal()">
+          📖 Adım Adım Bağlantı Kılavuzunu Aç ➔
+        </button>
       </div>
 
       <div style="margin-top: 14px; text-align: center;">
@@ -307,6 +314,61 @@
         </div>
 
         <button class="about-close-btn" onclick="closeAboutModal()" title="Kapat">✕</button>
+      </div>
+    </div>
+
+    <!-- TAILSCALE BAĞLANTI KILAVUZU MODAL -->
+    <div id="tailscale-modal" class="guide-modal-overlay" onclick="closeTailscaleGuideModal(event)">
+      <div class="guide-modal-card" onclick="event.stopPropagation()">
+        <div class="guide-modal-handle"></div>
+        <div class="guide-modal-header">
+          <div class="guide-modal-title-row">
+            <span class="guide-icon">🌐</span>
+            <h3>Tailscale ile Her Yerden Bağlantı Kılavuzu</h3>
+          </div>
+          <button class="guide-close-btn" onclick="closeTailscaleGuideModal(event)">✕</button>
+        </div>
+        <p class="guide-sub-desc">
+          Evde olmasanız bile 4.5G/5G üzerinden bilgisayarınızdaki müziği yönetmek için aşağıdaki 4 basit adımı takip edin:
+        </p>
+
+        <div class="guide-steps-list">
+          <div class="guide-step-item">
+            <div class="step-badge">1</div>
+            <div class="step-body">
+              <strong>Bilgisayarınıza Tailscale Kurun</strong>
+              <p>Bilgisayarınızda <a href="https://tailscale.com/download/windows" target="_blank" rel="noopener">tailscale.com/download</a> adresinden uygulamayı indirin ve Google / Microsoft veya Apple hesabınızla oturum açın.</p>
+            </div>
+          </div>
+
+          <div class="guide-step-item">
+            <div class="step-badge">2</div>
+            <div class="step-body">
+              <strong>Telefonunuza Tailscale Kurun</strong>
+              <p>Telefonunuzda Google Play Store'dan <strong>Tailscale</strong> uygulamasını indirin ve <u>bilgisayarınızdaki aynı hesapla</u> oturum açarak üstteki anahtarı aktif edin.</p>
+            </div>
+          </div>
+
+          <div class="guide-step-item">
+            <div class="step-badge">3</div>
+            <div class="step-body">
+              <strong>Bilgisayarın Tailscale IP'sini Alın</strong>
+              <p>Bilgisayarınızın görev çubuğunda (sağ altta) Tailscale simgesine tıklayın veya telefonunuzdaki Tailscale listesinden PC'nizin adını bulun. <strong>100.x.x.x</strong> ile başlayan IP adresini kopyalayın.</p>
+            </div>
+          </div>
+
+          <div class="guide-step-item">
+            <div class="step-badge">4</div>
+            <div class="step-body">
+              <strong>MusicBridge'e Bağlanın</strong>
+              <p>MusicBridge arayüzündeki <strong>"Sunucu Adresini Güncelle"</strong> kutucuğuna kopyaladığınız adresi sonuna <code>:8765</code> ekleyerek yazın (Örn: <code>100.115.42.10:8765</code>) ve <strong>Bağlan</strong> butonuna dokunun.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="guide-footer-tip">
+          💡 <strong>İpucu:</strong> Bir kere bağlandıktan sonra telefonunuz bu adresi hatırlar; dışarı çıktığınızda sadece telefonunuzdaki Tailscale'i açmanız yeterlidir!
+        </div>
       </div>
     </div>
   </div>

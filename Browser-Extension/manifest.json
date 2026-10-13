@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "MusicBridge Web Controller",
+  "version": "1.0.0",
+  "description": "YouTube Music, Spotify ve SoundCloud'u MusicBridge PC Core ile bağlar. Eren Teknoloji.",
+  "author": "Eren Teknoloji",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://music.youtube.com/*",
+    "https://open.spotify.com/*",
+    "https://soundcloud.com/*",
+    "http://localhost:8765/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://music.youtube.com/*",
+        "https://open.spotify.com/*",
+        "https://soundcloud.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "MusicBridge Web Controller"
+  }
+}

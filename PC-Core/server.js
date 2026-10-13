@@ -43,6 +43,10 @@ let currentState = {
   pinnedSource: 'auto'
 };
 
+// Güvenlik PIN Kodu ve Yetkilendirme
+let serverPin = (config.server && config.server.pin) ? String(config.server.pin) : String(Math.floor(1000 + Math.random() * 9000));
+const authorizedTokens = new Set();
+
 // Windows Başlangıç Kısayolu Yolu
 const startupDir = path.join(
   process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'),
@@ -286,7 +290,7 @@ async function fetchLyrics(title, artist) {
     const url = `https://lrclib.net/api/get?${query.toString()}`;
     const res = await fetch(url, {
       headers: { 'User-Agent': 'MusicBridge-Core/2.0 (Eren Teknoloji)' },
-      signal: AbortSignal.timeout(3500)
+      signal: AbortSignal.timeout(3000)
     });
     if (res.ok) {
       const data = await res.json();
@@ -297,10 +301,65 @@ async function fetchLyrics(title, artist) {
         syncedLyrics: data.syncedLyrics || '',
         instrumental: !!data.instrumental
       };
-      lyricsCache.set(cacheKey, result);
-      return result;
+      if (result.plainLyrics || result.syncedLyrics) {
+        lyricsCache.set(cacheKey, result);
+        return result;
+      }
     }
   } catch (e) {}
+
+  // 2. Fallback: Türkçe Müzik, Türkü ve Web Arama Motoru
+  const trResult = await fetchTurkishAndWebLyrics(cleanTitle, cleanArtist);
+  if (trResult) {
+    lyricsCache.set(cacheKey, trResult);
+    return trResult;
+  }
+
+  return null;
+}
+
+// Türkçe Şarkı ve Türkü Sözleri Çözücü
+async function fetchTurkishAndWebLyrics(cleanTitle, cleanArtist) {
+  try {
+    const searchTerms = [
+      `${cleanTitle} ${cleanArtist} sözleri`,
+      `${cleanTitle} türkü sözleri`
+    ];
+
+    for (const term of searchTerms) {
+      const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(term)}`;
+      const res = await fetch(searchUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        },
+        signal: AbortSignal.timeout(3500)
+      });
+      if (res.ok) {
+        const html = await res.text();
+        const snippetMatch = html.match(/class="result__snippet[^>]*>([\s\S]*?)<\/a>/i);
+        if (snippetMatch && snippetMatch[1]) {
+          const rawSnippet = snippetMatch[1]
+            .replace(/<[^>]+>/g, '')
+            .replace(/&quot;/g, '"')
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&#x27;/g, "'")
+            .trim();
+
+          if (rawSnippet.length > 40) {
+            return {
+              title: cleanTitle,
+              artist: cleanArtist,
+              plainLyrics: rawSnippet,
+              syncedLyrics: '',
+              instrumental: false
+            };
+          }
+        }
+      }
+    }
+  } catch (_) {}
   return null;
 }
 
@@ -479,8 +538,33 @@ const server = http.createServer((req, res) => {
       status: 'online',
       media: currentState,
       network: getNetworkIps(),
-      startup: getStartupStatus()
+      startup: getStartupStatus(),
+      pin: serverPin
     }));
+    return;
+  }
+
+  // PIN Eşleştirme & Doğrulama
+  if (url.pathname === '/api/auth/verify' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const { pin } = JSON.parse(body);
+        if (String(pin).trim() === serverPin) {
+          const token = 'mb_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+          authorizedTokens.add(token);
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ success: true, token }));
+        } else {
+          res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ success: false, error: 'Hatalı PIN kodu!' }));
+        }
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
     return;
   }
 

@@ -174,7 +174,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun showServerConfigDialog() {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val currentUrl = prefs.getString(KEY_SERVER_URL, "192.168.1.42:8765")
+        val currentUrl = prefs.getString(KEY_SERVER_URL, "") ?: ""
 
         val input = EditText(this).apply {
             hint = "192.168.1.x:8765 veya Tailscale IP"
