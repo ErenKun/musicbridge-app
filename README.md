@@ -55,7 +55,7 @@ Geleneksel uzaktan kumanda araçlarının aksine, **saatinize harici hiçbir uyg
 * 🔄 **Telefonda Anında Devam:** Bilgisayar başından ayrılırken tek tıkla şarkıyı telefonunuzda **kaldığı saniyeden** (örn: `02:18`) kulaklığınızda başlatın.
 * 🎤 **Akıllı Şarkı Sözleri (YouTube Music & Musixmatch Lisanslı DOM + Canlı Senkron):** Türk halk müziğinden türkülere ve popüler şarkılara kadar YouTube Music'in sağladığı zengin söz kütüphanesini ve LRCLIB canlı senkronunu anında telefona taşır. Özel söz arama desteği mevcuttur.
 * 📋 **Akıllı Kuyruk & YouTube.com Playlist Desteği:** Hem `music.youtube.com` hem de standart `youtube.com` çalma listeleri ve Mix'lerini otomatik yakalar. Şarkıya tıklayınca anında geçer; **"Sıradaki Yap"** butonuyla mevcut şarkı bitince devam edilecek parçayı belirler.
-* 🛡️ **Sıfır-Güven PIN Güvenliği:** Ortak Wi-Fi (yurt, ofis, ev) ağlarında yabancıların bilgisayarınızdaki müziği durdurmasını engeller; güvenli cihazları tek dokunuşla hatırlar.
+* 🛡️ **Sıfır-Güven PIN Koruması & İki Yönlü Sabit PIN Yönetimi:** Ortak Wi-Fi (yurt, ofis, ev) ağlarında yetkisiz erişimi engeller. İster PC sistem tepsisinden ister telefondan dilediğiniz sabit bir PIN (örn: `1234`) belirleyebilir, unutma durumunda tek tıkla sıfırlayabilirsiniz. Güvenli cihazları tek dokunuşla hatırlar.
 * 🌐 **Tailscale & Uzaktan Erişim:** Sadece ev Wi-Fi ağında değil; Tailscale Mesh entegrasyonu sayesinde mobil veride (4.5G) sokaktayken dahi bilgisayarınızdaki müziği yönetin.
 * 💻 **Otomatik Sistem Tepsisi (Tray) & Akıllı Port Yönetimi:** Windows başlangıcında simge kesinlikle tepsiye yerleşir. 8765 portu meşgulse çökmeden bir sonraki boş porta otomatik atlar.
 * 🪶 **Ultra Hafif Mimari:** Ağır arayüz motorları barındırmaz. Arka planda yalnızca **~15 MB RAM** tüketir; pili sömürmez, eski ve yeni tüm Android cihazlarda (Android 8.0 - 15+) yağ gibi akar.
@@ -66,7 +66,7 @@ Geleneksel uzaktan kumanda araçlarının aksine, **saatinize harici hiçbir uyg
 
 Eren Teknoloji olarak kişisel gizliliğe ve yerel ağ güvenliğine en üst düzeyde önem veriyoruz. Ortak ev ağlarında, öğrenci yurtlarında veya ofis ortamlarında aynı Wi-Fi'ye bağlı başka birinin tarayıcıdan bilgisayarınızın yerel IP'sini girerek **izniniz dışında müziğinizi yönetmesini tamamen engelledik.**
 
-### 🛡️ 4 Haneli Eşleştirme PIN'i ve Aygıt Doğrulama Akışı
+### 🛡️ Sıfır-Güven (Zero-Trust) Eşleştirme Akışı
 
 ```mermaid
 sequenceDiagram
@@ -76,12 +76,12 @@ sequenceDiagram
     participant Core as 🖥️ MusicBridge Core (PC)
     participant Tray as 📌 Windows Sistem Tepsisi (Tray)
 
-    Core->>Tray: 🔑 PIN Belirlendi (Örn: 4821)
-    Note over Tray: Sağ alttaki simgeye tıklayarak:<br/>"🔑 Güvenlik PIN: 4821" görebilir ve kopyalayabilirsiniz
+    Core->>Tray: 🔑 PIN Belirlendi (Örn: 1234)
+    Note over Tray: Sağ alttaki simgeye tıklayarak:<br/>"🔑 Güvenlik PIN: 1234" görebilir ve kopyalayabilirsiniz
 
     Eren->>Core: İlk kez IP ile bağlandı
     Core-->>Eren: "🔒 Cihaz Doğrulama: PC'deki 4 haneli PIN'i girin"
-    Eren->>Core: PIN: 4821 + [✓] "Bu Cihazı Hatırla"
+    Eren->>Core: PIN: 1234 + [✓] "Bu Cihazı Hatırla"
     Core-->>Eren: ✅ Yetkilendirme Başarılı (Token verildi)
     Note over Eren: Kendi telefonunuz artık bir daha asla PIN sormaz!
 
@@ -92,19 +92,59 @@ sequenceDiagram
     Note over Yabanci: PIN bilmediği için müziğinize asla müdahale edemez!
 ```
 
-### Güvenlik Prensiplerimiz:
-1. **PIN Bilgisayardan Nasıl Öğrenilir?**
-   - Windows görev çubuğunun sağ altındaki **MusicBridge tepsisi simgesine** sağ tıklayarak en üstteki **"🔑 Güvenlik PIN: XXXX"** alanından tek tıkla görebilir ve kopyalayabilirsiniz.
-   - Bilgisayarın kendi tarayıcısından (`localhost:8765`) girildiğinde sistem sizi doğrudan tanır ve PIN sormaz; "Bağlantı" sekmesinde PIN her zaman okunabilir ve kopyalanabilir.
-2. **Özel Sabit PIN Belirleme & Sıfırlama (İki Yönlü Kolaylık):**
-   - Hem **Sistem Tepsisi Menüsünden** (`✏️ Özel Sabit PIN Belirle...`) hem de **Telefon/Web Bağlantı Menüsünden** dilediğiniz 4 haneli kalıcı PIN kodunu (örn: `1234`) belirleyebilirsiniz.
-   - PIN'i unutma veya yenilemek isteme durumunda tek tıkla **"🎲 Rastgele Yeni PIN Üret (Sıfırla)"** seçeneğiyle anında yeni bir PIN atanır.
-   - Belirlenen PIN kodu `config.json` dosyasına kalıcı kaydedilir; bilgisayar yeniden başlasa dahi korunur.
-3. **Akıllı Cihaz Hafızası ("Bu Cihazı Hatırla"):**
-   - Kendi telefonunuzdan veya tabletinizden PIN kodunu bir kez girdikten sonra cihazınız güvenli şifrelenmiş jeton (token) ile kaydedilir. Bir daha asla PIN sormaz.
-4. **Bulutsuz & Sıfır İzleme:**
-   - Şarkı geçmişiniz, dinleme alışkanlıklarınız veya donanım verileriniz hiçbir harici sunucuya veya buluta gönderilmez.
-   - Tüm iletişim yerel Wi-Fi ağınızda veya uçtan uca şifreli Tailscale WireGuard tünelinizde gerçekleşir.
+---
+
+### 🔑 İki Yönlü Sabit PIN Belirleme & Sıfırlama Mimarisi
+
+MusicBridge, güvenliği katı bir zorunluluk olmaktan çıkarıp **kullanıcı kontrolünde esnek ve zahmetsiz bir deneyime** dönüştürür. 
+
+Her bilgisayar açılışında rastgele değişen şifreleri ezberlemek zorunda değilsiniz. Dilediğiniz zaman **sabit bir PIN (örneğin: `1234` veya `0000`)** belirleyebilir, unuttuğunuzda ise hem bilgisayarınızın sistem tepsisinden hem de telefonunuzdan tek tıkla sıfırlayabilirsiniz.
+
+```mermaid
+flowchart TD
+    subgraph TRAY["🖥️ PC Sistem Tepsisi (System Tray)"]
+        T1["🔑 PIN Kopyala"]
+        T2["✏️ Özel Sabit PIN Belirle (örn: 1234)"]
+        T3["🎲 Rastgele Yeni PIN Üret (Sıfırla)"]
+    end
+
+    subgraph WEB["📱 Mobil / Web Arayüzü ('Bağlantı' Sekmesi)"]
+        W1["📋 Aktif PIN Göstergesi & Kopyala"]
+        W2["✏️ Yeni Sabit PIN Gir & Kaydet"]
+        W3["🎲 Rastgele Yeni PIN Üret (Sıfırla)"]
+    end
+
+    subgraph BACKEND["🛡️ MusicBridge PC Core (Zero-Trust Güvenlik Motoru)"]
+        GATE{"Yetki Kontrolü<br/>(Localhost veya Yetkili Token?)"}
+        REJECT["❌ HTTP 401 Yetkisiz Erişim<br/>(Ağdaki yabancıların PIN değiştirmesi engellenir)"]
+        ACCEPT["✅ POST /api/auth/pin Doğrulandı"]
+        CONFIG["💾 config.json Kalıcı Kayıt<br/>(PC yeniden başlasa da korunur)"]
+        WS["📡 WebSocket 'pin-updated' Canlı Yayını<br/>(Tüm bağlı cihazlarda anında güncellenir)"]
+    end
+
+    T2 --> GATE
+    T3 --> GATE
+    W2 --> GATE
+    W3 --> GATE
+
+    GATE -- "Yabancı Cihaz" --> REJECT
+    GATE -- "Yetkili Cihaz / Localhost" --> ACCEPT
+    ACCEPT --> CONFIG
+    ACCEPT --> WS
+    WS -.->|Canlı Senkron| WEB
+```
+
+#### 🌟 Neden Bu Kadar Kullanışlı ve Güvenli?
+
+| Özellik & Senaryo | Nasıl Çalışır? | Sağladığı Avantaj |
+|:---|:---|:---|
+| **🎯 Sabit Özel PIN Belirleme** | İster Windows tepsisinden sağ tıklayıp `✏️ Özel Sabit PIN Belirle...` deyin, ister telefonunuzdaki Bağlantı sekmesinden yeni PIN'i girip `PIN Kaydet`e basın. | Her PC açılışında yeni kod arama derdi biter. Kendi belirlediğiniz kod (örn: `1234`) geçerli kalır. |
+| **🔄 Unutma & Acil Sıfırlama Kalkanı** | Şifreyi unuttuysanız veya evinize gelen bir misafire geçici erişim verdikten sonra kodu yenilemek isterseniz, tek tıkla `🎲 Rastgele Yeni PIN Üret (Sıfırla)` butonuna basın. | Sunucuyu veya bilgisayarı yeniden başlatmaya gerek kalmadan saniyesinde yeni 4 haneli PIN atanır. |
+| **🛡️ Zero-Trust Yabancı Koruması** | Ağdaki yabancı bir kişi `/api/auth/pin` uç noktasına doğrudan istek atsa bile sistem token doğrulaması yapar ve `HTTP 401` döndürür. | Yalnızca bilgisayarın bizzat başındaki kişi (localhost) veya daha önce eşleştirilmiş yetkili cihazlar PIN değiştirebilir. |
+| **⚡ Çift Yönlü Canlı Senkronizasyon** | PIN ister PC Sistem Tepsisinden ister telefondan değiştirilsin; WebSocket üzerinden anında tüm bağlı ekranlara yayılır. | Sayfayı yenilemeye gerek kalmadan arayüzdeki PIN rozeti anında güncellenir ve onay balonu gösterilir. |
+| **💾 Kalıcı Yapılandırma (`config.json`)** | Belirlenen sabit veya rastgele PIN sunucu belleğinin yanı sıra `config.json` dosyasına işlenir. | Bilgisayar yeniden başlatıldığında veya elektrik kesintisi sonrasında dahi tanımladığınız PIN asla kaybolmaz. |
+| **🧠 Akıllı Cihaz Hafızası ("Bu Cihazı Hatırla")** | PIN kodunu kendi cihazınızdan bir kez girdikten sonra cihazınız güvenli şifrelenmiş jeton (token) ile kaydedilir. | Kendi telefonunuz veya tabletiniz için bir daha asla PIN sormaz, anında bağlanır. |
+| **🔒 Bulutsuz & Sıfır İzleme** | Dinleme verileriniz, oturum anahtarlarınız veya donanım kimliğiniz hiçbir harici bulut sunucusuna gönderilmez. | Tüm iletişim yerel Wi-Fi veya uçtan uca şifreli Tailscale WireGuard tünelinizde gerçekleşir. |
 
 ---
 
@@ -114,7 +154,7 @@ sequenceDiagram
 |:---|:---:|:---:|:---:|
 | **Saate Ek Uygulama Gerekir Mi?** | Evet | Evet | ❌ **Gerekmez (Yerel Destek)** |
 | **Telefona Saniyesinden Aktarma** | ❌ Yok | ❌ Yok | ✅ **Tek Tıkla Doğrudan** |
-| **Ağ İçi Yetkisiz Erişim Koruması** | ❌ Yok | ⚠️ Kısıtlı | 🛡️ **Zero-Trust PIN Sistemi** |
+| **Ağ İçi Yetkisiz Erişim Koruması** | ❌ Yok | ⚠️ Kısıtlı | 🛡️ **Zero-Trust PIN (Sabitlenebilir & Çift Yönlü Sıfırlama)** |
 | **YouTube Music Söz Senkronu** | ❌ Yok | ❌ Yok | 🎤 **Musixmatch & LRCLIB** |
 | **YouTube.com Playlist & Kuyruk** | ❌ Yok | ❌ Yok | 📋 **Anında Çalma & Sırada Çal** |
 | **RAM Tüketimi** | ~60-120 MB | ~50-80 MB | 🚀 **~15 MB (Ultra Hafif)** |
