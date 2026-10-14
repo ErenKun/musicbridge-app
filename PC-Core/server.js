@@ -490,6 +490,11 @@ function startWindowsMediaBridge() {
                               currentState.duration !== payload.duration ||
                               (payload.artwork && currentState.artwork !== payload.artwork);
 
+            if (trackChanged) {
+              lastExtractedLyrics = null;
+              broadcast({ type: 'lyrics-change', data: null });
+            }
+
             currentState.title = normalizedTitle;
             currentState.artist = normalizedArtist;
             currentState.album = fixEncoding(payload.album || '');
@@ -754,11 +759,11 @@ const server = http.createServer((req, res) => {
     const title = (url.searchParams.get('title') || currentState.title || '').trim();
     const artist = (url.searchParams.get('artist') || currentState.artist || '').trim();
 
-    // 1. Önce YouTube Music eklentisinin canlı çektiği sözleri kontrol et (Musixmatch kalitesi)
+    // 1. Önce YouTube Music eklentisinin canlı çektiği sözleri kontrol et (sadece başlık eşleşiyorsa!)
     if (lastExtractedLyrics && lastExtractedLyrics.plainLyrics) {
       const cleanReq = title.toLowerCase().replace(/\(.*?\)|\[.*?\]/g, '').trim();
       const cleanLrc = (lastExtractedLyrics.title || '').toLowerCase().replace(/\(.*?\)|\[.*?\]/g, '').trim();
-      if (!cleanReq || !cleanLrc || cleanReq.includes(cleanLrc) || cleanLrc.includes(cleanReq)) {
+      if (cleanReq && cleanLrc && (cleanReq.includes(cleanLrc) || cleanLrc.includes(cleanReq))) {
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({
           success: true,
@@ -771,7 +776,7 @@ const server = http.createServer((req, res) => {
     // 2. Canlı senkronize sözler için LRCLIB veya fallback motoru
     fetchLyrics(title, artist)
       .then(lyrics => {
-        const finalLyrics = lyrics || (lastExtractedLyrics && lastExtractedLyrics.plainLyrics ? lastExtractedLyrics : { plainLyrics: 'Şarkı sözü bulunamadı.', syncedLyrics: '' });
+        const finalLyrics = lyrics || { plainLyrics: 'Şarkı sözü bulunamadı.', syncedLyrics: '' };
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({
           success: true,
@@ -779,8 +784,8 @@ const server = http.createServer((req, res) => {
         }));
       })
       .catch(err => {
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ error: err.message }));
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ success: false, lyrics: { plainLyrics: 'Şarkı sözü bulunamadı.', syncedLyrics: '' } }));
       });
     return;
   }
@@ -1075,6 +1080,9 @@ function updateStateFromBrowser(data) {
       timestamp: Date.now()
     };
     broadcast({ type: 'lyrics-change', data: lastExtractedLyrics });
+  } else if (data.title && currentState.title && data.title !== currentState.title) {
+    lastExtractedLyrics = null;
+    broadcast({ type: 'lyrics-change', data: null });
   }
 
   // 4. Eğer yerel Windows GSMTC henüz müzik yakalamadıysa (Boşta ise),
@@ -1082,6 +1090,7 @@ function updateStateFromBrowser(data) {
   const isGsmtcActive = currentState.sourceApp && currentState.sourceApp !== 'Boşta' && !currentState.title.includes('Bekleniyor');
   if (!isGsmtcActive) {
     if (data.title && currentState.title !== data.title) {
+      lastExtractedLyrics = null;
       currentState.title = data.title;
       currentState.artist = data.artist || 'YouTube Music';
       currentState.isPlaying = !!data.isPlaying;
