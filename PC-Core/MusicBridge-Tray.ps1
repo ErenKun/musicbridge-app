@@ -9,10 +9,10 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $scriptDir
 
 # 1. Server.js calisiyor mu kontrol et, calismiyorsa arka planda baslat
-$existing = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*server.js*' }
+$existing = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*server.js*' }
 if (-not $existing) {
     Start-Process -FilePath "node.exe" -ArgumentList "server.js" -WorkingDirectory $scriptDir -WindowStyle Hidden
-    Start-Sleep -Milliseconds 800
+    Start-Sleep -Milliseconds 1200
 }
 
 # 2. Aktif Port ve PIN Kodunu Tespit Et
@@ -20,8 +20,6 @@ $activePort = 8765
 $serverPin = "----"
 
 function RefreshServerInfo {
-    global:activePort
-    global:serverPin
     foreach ($p in 8765..8775) {
         try {
             $status = Invoke-RestMethod -Uri "http://127.0.0.1:$p/api/status" -TimeoutSec 1 -ErrorAction Stop
@@ -65,7 +63,7 @@ $contextMenu.Items.Add($titleItem) | Out-Null
 
 # Guvenlik PIN Elemani (Tiklayinca panoya kopyalar)
 $pinItem = New-Object System.Windows.Forms.ToolStripMenuItem
-$pinItem.Text = "🔑 Guvenlik PIN: $serverPin (Kopyala)"
+$pinItem.Text = "[PIN] Guvenlik Kodu: $serverPin (Kopyala)"
 $pinItem.Font = New-Object System.Drawing.Font($pinItem.Font, [System.Drawing.FontStyle]::Bold)
 $pinItem.add_Click({
     RefreshServerInfo
@@ -76,7 +74,7 @@ $contextMenu.Items.Add($pinItem) | Out-Null
 
 # PIN Degistir / Sabit PIN Belirle
 $changePinItem = New-Object System.Windows.Forms.ToolStripMenuItem
-$changePinItem.Text = "✏️ Ozel Sabit PIN Belirle..."
+$changePinItem.Text = "[Ayar] Ozel Sabit PIN Belirle..."
 $changePinItem.add_Click({
     RefreshServerInfo
     $promptMsg = "MusicBridge baglantilari icin yeni 4 haneli PIN kodunu girin (ornegin: 1234):`n`nBu kod kalici olarak kaydedilir ve unutursaniz buradan degistirebilirsiniz."
@@ -89,7 +87,7 @@ $changePinItem.add_Click({
                 $res = Invoke-RestMethod -Uri "http://127.0.0.1:$($global:activePort)/api/auth/pin" -Method Post -Body $body -ContentType "application/json; charset=utf-8" -TimeoutSec 3
                 if ($res.success) {
                     $global:serverPin = $res.pin
-                    $pinItem.Text = "🔑 Guvenlik PIN: $($global:serverPin) (Kopyala)"
+                    $pinItem.Text = "[PIN] Guvenlik Kodu: $($global:serverPin) (Kopyala)"
                     $notifyIcon.ShowBalloonTip(2500, "MusicBridge PIN Guncellendi", "Yeni Guvenlik PIN: $($res.pin)", [System.Windows.Forms.ToolTipIcon]::Info)
                 }
             } catch {
@@ -104,7 +102,7 @@ $contextMenu.Items.Add($changePinItem) | Out-Null
 
 # PIN Rastgele Uret / Sifirla
 $resetPinItem = New-Object System.Windows.Forms.ToolStripMenuItem
-$resetPinItem.Text = "🎲 Rastgele Yeni PIN Uret (Sifirla)"
+$resetPinItem.Text = "[Yenile] Rastgele Yeni PIN Uret (Sifirla)"
 $resetPinItem.add_Click({
     RefreshServerInfo
     try {
@@ -112,7 +110,7 @@ $resetPinItem.add_Click({
         $res = Invoke-RestMethod -Uri "http://127.0.0.1:$($global:activePort)/api/auth/pin" -Method Post -Body $body -ContentType "application/json; charset=utf-8" -TimeoutSec 3
         if ($res.success) {
             $global:serverPin = $res.pin
-            $pinItem.Text = "🔑 Guvenlik PIN: $($global:serverPin) (Kopyala)"
+            $pinItem.Text = "[PIN] Guvenlik Kodu: $($global:serverPin) (Kopyala)"
             $notifyIcon.ShowBalloonTip(2500, "MusicBridge PIN Sifirlandi", "Yeni Rastgele PIN: $($res.pin)", [System.Windows.Forms.ToolTipIcon]::Info)
         }
     } catch {
@@ -125,7 +123,7 @@ $contextMenu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator)) | O
 
 # Web Arayuzunu Ac
 $openWebItem = New-Object System.Windows.Forms.ToolStripMenuItem
-$openWebItem.Text = "Web Arayuzunu Ac (localhost:$activePort)"
+$openWebItem.Text = "Web Arayuzunu Ac"
 $openWebItem.add_Click({
     RefreshServerInfo
     Start-Process "http://localhost:$global:activePort"
@@ -184,7 +182,7 @@ $exitItem.Text = "MusicBridge'i Kapat"
 $exitItem.add_Click({
     $notifyIcon.Visible = $false
     # Server ve bagli surecleri sonlandir
-    Get-CimInstance Win32_Process | Where-Object { 
+    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { 
         $_.CommandLine -like '*server.js*' -or 
         $_.CommandLine -like '*windows-media-bridge.ps1*' -or 
         ($_.CommandLine -like '*MusicBridge-Tray.ps1*' -and $_.ProcessId -ne $PID)
@@ -196,7 +194,7 @@ $contextMenu.Items.Add($exitItem) | Out-Null
 # Menu acilmadan hemen once PIN ve Portu guncelle
 $contextMenu.add_Opening({
     RefreshServerInfo
-    $pinItem.Text = "🔑 Guvenlik PIN: $global:serverPin (Kopyala)"
+    $pinItem.Text = "[PIN] Guvenlik Kodu: $global:serverPin (Kopyala)"
     $openWebItem.Text = "Web Arayuzunu Ac (localhost:$global:activePort)"
 })
 
@@ -208,7 +206,7 @@ $notifyIcon.add_DoubleClick({
     Start-Process "http://localhost:$global:activePort"
 })
 
-$notifyIcon.ShowBalloonTip(2500, "MusicBridge Aktif!", "🔑 PIN: $serverPin`nTiklayarak arayuzu acabilirsiniz.", [System.Windows.Forms.ToolTipIcon]::Info)
+$notifyIcon.ShowBalloonTip(2500, "MusicBridge Aktif!", "PIN: $serverPin`nTiklayarak arayuzu acabilirsiniz.", [System.Windows.Forms.ToolTipIcon]::Info)
 
 # Mesaj dongusu
 [System.Windows.Forms.Application]::Run()
