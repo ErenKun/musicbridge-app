@@ -24,6 +24,7 @@ if (fs.existsSync(configPath)) {
 const DEFAULT_PORT = config.server.http_port || 8765;
 let ACTIVE_PORT = DEFAULT_PORT;
 const TH_CH_URL = config.youtube_music.th_ch_api_url || 'http://127.0.0.1:13091';
+let pendingBrowserCommands = [];
 
 // Aktif medya durumu
 let currentState = {
@@ -859,8 +860,10 @@ const server = http.createServer((req, res) => {
       try {
         const data = JSON.parse(body);
         updateStateFromBrowser(data);
+        const commands = [...pendingBrowserCommands];
+        pendingBrowserCommands = [];
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ success: true }));
+        res.end(JSON.stringify({ success: true, commands }));
       } catch (err) {
         res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ error: err.message }));
@@ -1031,6 +1034,8 @@ async function executeMediaCommand(action, data) {
   // 3. Tarayıcı Eklentisine eklentiye özel komutları ilet (seekToQueueIndex, setNextTrackIndex, getLyrics)
   if (action === 'seekToQueueIndex' || action === 'setNextTrackIndex' || action === 'getLyrics') {
     broadcast({ type: 'browser-command', action, data });
+    pendingBrowserCommands.push({ action, data, time: Date.now() });
+    if (pendingBrowserCommands.length > 20) pendingBrowserCommands.shift();
   }
 }
 

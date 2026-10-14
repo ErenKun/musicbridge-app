@@ -55,13 +55,89 @@
         } else if (action === 'seekTo') {
             video.currentTime = Number(data);
         } else if (action === 'seekToQueueIndex') {
-            const queueItems = document.querySelectorAll('ytmusic-player-queue-item');
-            if (queueItems && queueItems[Number(data)]) {
-                const target = queueItems[Number(data)];
-                const playBtn = target.querySelector('.play-button') || target;
-                playBtn.click();
-            }
+            jumpToYtMusicQueueIndex(data);
+        } else if (action === 'setNextTrackIndex') {
+            pendingNextTrackData = data;
         }
+    }
+
+    let pendingNextTrackData = null;
+
+    function jumpToYtMusicQueueIndex(param) {
+        let targetIdx = -1;
+        let targetTitle = '';
+
+        if (typeof param === 'object' && param !== null) {
+            targetIdx = typeof param.index === 'number' ? param.index : -1;
+            targetTitle = (param.title || '').trim().toLowerCase();
+        } else if (typeof param === 'number') {
+            targetIdx = param;
+        } else if (typeof param === 'string' && !isNaN(Number(param)) && param.trim() !== '') {
+            targetIdx = Number(param);
+        } else if (typeof param === 'string') {
+            targetTitle = param.trim().toLowerCase();
+        }
+
+        let queueItems = Array.from(document.querySelectorAll('ytmusic-player-queue-item'));
+        if (!queueItems || queueItems.length === 0) {
+            const tabs = document.querySelectorAll('ytmusic-player-page ytmusic-tab-header-renderer, ytmusic-player-page tp-yt-paper-tab');
+            for (const tab of tabs) {
+                const txt = (tab.textContent || '').toLowerCase();
+                if (txt.includes('sonraki') || txt.includes('up next') || txt.includes('sıradaki') || txt.includes('kuyruk')) {
+                    tab.click();
+                    break;
+                }
+            }
+            queueItems = Array.from(document.querySelectorAll('ytmusic-player-queue-item'));
+        }
+
+        if (!queueItems || queueItems.length === 0) return;
+
+        let target = null;
+        if (targetTitle) {
+            target = queueItems.find(el => {
+                const root = el.shadowRoot || el;
+                const tEl = el.querySelector('.song-title, .title') || root.querySelector('.title, .song-title');
+                const txt = (tEl ? tEl.textContent : '').trim().toLowerCase();
+                return txt && (txt === targetTitle || txt.includes(targetTitle) || targetTitle.includes(txt));
+            });
+        }
+
+        if (!target && targetIdx >= 0 && targetIdx < queueItems.length) {
+            target = queueItems[targetIdx];
+        }
+
+        if (!target) return;
+
+        try { target.scrollIntoView({ block: 'nearest', behavior: 'instant' }); } catch (_) {}
+
+        const opts = { bubbles: true, cancelable: true, view: window, buttons: 1, composed: true };
+        const root = target.shadowRoot;
+        const clickTargets = [
+            root ? root.querySelector('.play-button') : null,
+            root ? root.querySelector('.thumbnail-wrapper') : null,
+            root ? root.querySelector('#layout') : null,
+            root ? root.querySelector('.title, .song-title') : null,
+            target.querySelector('ytmusic-play-button-renderer #button'),
+            target.querySelector('ytmusic-play-button-renderer'),
+            target.querySelector('.play-button'),
+            target.querySelector('.song-title, .title'),
+            target
+        ].filter(Boolean);
+
+        for (const el of clickTargets) {
+            try {
+                el.dispatchEvent(new MouseEvent('mouseover', opts));
+                el.dispatchEvent(new MouseEvent('mousedown', opts));
+                el.dispatchEvent(new MouseEvent('mouseup', opts));
+                el.dispatchEvent(new MouseEvent('click', opts));
+                if (typeof el.click === 'function') el.click();
+            } catch (_) {}
+        }
+
+        try {
+            target.dispatchEvent(new MouseEvent('dblclick', opts));
+        } catch (_) {}
     }
 
     // YouTube Music'ten Kuyruk Listesini Çek

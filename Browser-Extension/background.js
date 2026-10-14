@@ -85,15 +85,34 @@ connectCoreWs();
 // Gelen komutları (seekToQueueIndex, playNext, playPause vb.) açık müzik sekmelerine ilet
 function broadcastCommandToTabs(msg) {
   if (!chrome.tabs) return;
+  
+  // 1. URL pattern ile filtreleme (En hızlı ve izin uyumlu)
+  chrome.tabs.query({
+    url: [
+      '*://music.youtube.com/*',
+      '*://*.youtube.com/*',
+      '*://*.spotify.com/*',
+      '*://*.soundcloud.com/*'
+    ]
+  }, (tabs) => {
+    if (!chrome.runtime.lastError && tabs && tabs.length > 0) {
+      for (const tab of tabs) {
+        if (tab.id) {
+          chrome.tabs.sendMessage(tab.id, msg).catch(() => {});
+        }
+      }
+    }
+  });
+
+  // 2. Yedek: Tüm sekmelerde URL kontrolü
   chrome.tabs.query({}, (tabs) => {
+    if (chrome.runtime.lastError || !tabs) return;
     for (const tab of tabs) {
-      if (tab.id && tab.url && (
-        tab.url.includes('music.youtube.com') ||
-        tab.url.includes('youtube.com') ||
-        tab.url.includes('spotify.com') ||
-        tab.url.includes('soundcloud.com')
-      )) {
-        chrome.tabs.sendMessage(tab.id, msg).catch(() => {});
+      if (tab.id && tab.url && typeof tab.url === 'string') {
+        const u = tab.url.toLowerCase();
+        if (u.includes('music.youtube.com') || u.includes('youtube.com') || u.includes('spotify.com') || u.includes('soundcloud.com')) {
+          chrome.tabs.sendMessage(tab.id, msg).catch(() => {});
+        }
       }
     }
   });
@@ -116,7 +135,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       } catch (_) {}
     }
 
-    // 2. WebSocket kapalıysa HTTP POST ile ilet
+    // 2. WebSocket kapalıysa HTTP POST ile ilet ve yanıtta bekleyen komutları çalıştır
     const endpoint = message.type === 'LYRICS_UPDATE' ? '/api/lyrics/update' : '/api/browser-update';
     fetch(`http://127.0.0.1:${CORE_PORT}${endpoint}`, {
       method: 'POST',
@@ -124,7 +143,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       body: JSON.stringify(message.data)
     })
       .then(res => res.json())
-      .then(data => sendResponse({ success: true, via: 'http', data }))
+      .then(data => {
+        if (data && Array.isArray(data.commands) && data.commands.length > 0) {
+          for (const cmd of data.commands) {
+            broadcastCommandToTabs({ type: 'browser-command', action: cmd.action, data: cmd.data });
+          }
+        }
+        sendResponse({ success: true, via: 'http', data });
+      })
       .catch(e => sendResponse({ success: false, error: e.message }));
 
     return true; // Asenkron yanıt

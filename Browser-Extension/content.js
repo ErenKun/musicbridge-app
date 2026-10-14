@@ -4,7 +4,7 @@
 (function() {
   'use strict';
 
-  let pendingNextTrackIndex = null;
+  let pendingNextTrackData = null;
   let lastReportedVideoId = '';
 
   // 1. Background Service Worker'dan gelen komutları dinle
@@ -67,11 +67,17 @@
         video.currentTime = Number(data);
       } else if (action === 'seekToQueueIndex') {
         // Doğrudan tıklayıp hemen o şarkıya geç
-        jumpToYtMusicQueueIndex(Number(data));
+        jumpToYtMusicQueueIndex(data);
       } else if (action === 'setNextTrackIndex') {
         // Bu şarkı bitince bundan devam et (Sırada Çal)
-        pendingNextTrackIndex = Number(data);
-        showOnPageNotification(`⏭️ Sıradaki şarkı belirlendi (${pendingNextTrackIndex + 1}. parça)`);
+        if (data === null || data === -1) {
+          pendingNextTrackData = null;
+          showOnPageNotification('Sıradaki şarkı seçimi kaldırıldı.');
+        } else {
+          pendingNextTrackData = data;
+          const trackTitle = (typeof data === 'object' && data.title) ? data.title : 'Seçilen parça';
+          showOnPageNotification(`⏭️ Sıradaki şarkı: ${trackTitle}`);
+        }
       } else if (action === 'getLyrics') {
         loadAndSendYtMusicLyrics();
       }
@@ -97,10 +103,16 @@
       } else if (action === 'seekTo') {
         video.currentTime = Number(data);
       } else if (action === 'seekToQueueIndex') {
-        jumpToYtVideoQueueIndex(Number(data));
+        jumpToYtVideoQueueIndex(data);
       } else if (action === 'setNextTrackIndex') {
-        pendingNextTrackIndex = Number(data);
-        showOnPageNotification(`⏭️ Sıradaki video belirlendi (${pendingNextTrackIndex + 1}. sıra)`);
+        if (data === null || data === -1) {
+          pendingNextTrackData = null;
+          showOnPageNotification('Sıradaki video seçimi kaldırıldı.');
+        } else {
+          pendingNextTrackData = data;
+          const trackTitle = (typeof data === 'object' && data.title) ? data.title : 'Seçilen video';
+          showOnPageNotification(`⏭️ Sıradaki video: ${trackTitle}`);
+        }
       }
     }
 
@@ -134,51 +146,155 @@
   }
 
   // -------------------------------------------------------------
-  // YOUTUBE MUSIC KUYRUK & ŞARKI DEĞİŞTİRME
+  // YOUTUBE MUSIC KUYRUK & ŞARKI DEĞİŞTİRME (SHADOW DOM + BAŞLIK DESTEKLİ)
   // -------------------------------------------------------------
-  function jumpToYtMusicQueueIndex(targetIdx) {
-    const queueItems = document.querySelectorAll('ytmusic-player-queue-item');
-    if (queueItems && queueItems[targetIdx]) {
-      const target = queueItems[targetIdx];
-      try {
-        target.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      } catch (_) {}
-      
-      // 1. Tıklanabilir olası butonları bul (Play butonu, thumbnail veya eleman)
-      const playBtn = target.querySelector('ytmusic-play-button-renderer #button, #play-button, .play-button, tp-yt-paper-icon-button, .left-items, .thumbnail-container') || target;
-      
-      // 2. Çoklu mouse event dispatch (YouTube Music web component'leri için)
-      const opts = { bubbles: true, cancelable: true, view: window, buttons: 1 };
-      playBtn.dispatchEvent(new MouseEvent('mousedown', opts));
-      playBtn.dispatchEvent(new MouseEvent('mouseup', opts));
-      playBtn.dispatchEvent(new MouseEvent('click', opts));
-      try { playBtn.click(); } catch (_) {}
-      target.dispatchEvent(new MouseEvent('dblclick', opts));
+  function jumpToYtMusicQueueIndex(param) {
+    let targetIdx = -1;
+    let targetTitle = '';
+
+    if (typeof param === 'object' && param !== null) {
+      targetIdx = typeof param.index === 'number' ? param.index : -1;
+      targetTitle = (param.title || '').trim().toLowerCase();
+    } else if (typeof param === 'number') {
+      targetIdx = param;
+    } else if (typeof param === 'string' && !isNaN(Number(param)) && param.trim() !== '') {
+      targetIdx = Number(param);
+    } else if (typeof param === 'string') {
+      targetTitle = param.trim().toLowerCase();
     }
+
+    let queueItems = Array.from(document.querySelectorAll('ytmusic-player-queue-item'));
+
+    // Eğer kuyruk elemanları DOM'da yoksa Up Next / Sonraki sekmesini açmayı dene
+    if (!queueItems || queueItems.length === 0) {
+      const tabs = document.querySelectorAll('ytmusic-player-page ytmusic-tab-header-renderer, ytmusic-player-page tp-yt-paper-tab');
+      for (const tab of tabs) {
+        const txt = (tab.textContent || '').toLowerCase();
+        if (txt.includes('sonraki') || txt.includes('up next') || txt.includes('sıradaki') || txt.includes('kuyruk')) {
+          tab.click();
+          break;
+        }
+      }
+      queueItems = Array.from(document.querySelectorAll('ytmusic-player-queue-item'));
+    }
+
+    if (!queueItems || queueItems.length === 0) return false;
+
+    let target = null;
+
+    // 1. Önce parça adına göre eşleşen öğeyi bul (İndeks kaymalarından etkilenmez!)
+    if (targetTitle) {
+      target = queueItems.find(el => {
+        const root = el.shadowRoot || el;
+        const tEl = el.querySelector('.song-title, .title') || root.querySelector('.title, .song-title');
+        const txt = (tEl ? tEl.textContent : '').trim().toLowerCase();
+        return txt && (txt === targetTitle || txt.includes(targetTitle) || targetTitle.includes(txt));
+      });
+    }
+
+    // 2. Parça adına göre bulunamadıysa verilen indeksi kullan
+    if (!target && targetIdx >= 0 && targetIdx < queueItems.length) {
+      target = queueItems[targetIdx];
+    }
+
+    if (!target) return false;
+
+    // 3. Görünürlüğe getir (IntersectionObserver ve Sanal liste için)
+    try {
+      target.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+    } catch (_) {}
+
+    const opts = { bubbles: true, cancelable: true, view: window, buttons: 1, composed: true };
+    const root = target.shadowRoot;
+
+    // 4. Shadow DOM ve Light DOM içindeki tüm olası tıklanabilir hedefleri topla
+    const clickTargets = [
+      root ? root.querySelector('.play-button') : null,
+      root ? root.querySelector('.thumbnail-wrapper') : null,
+      root ? root.querySelector('#layout') : null,
+      root ? root.querySelector('.title, .song-title') : null,
+      root ? root.querySelector('img') : null,
+      root ? root.querySelector('a') : null,
+      target.querySelector('ytmusic-play-button-renderer #button'),
+      target.querySelector('ytmusic-play-button-renderer'),
+      target.querySelector('.play-button'),
+      target.querySelector('.left-items'),
+      target.querySelector('.thumbnail-container'),
+      target.querySelector('.song-title, .title, yt-formatted-string'),
+      target.querySelector('a.yt-simple-endpoint, a'),
+      target
+    ].filter(Boolean);
+
+    // 5. Çoklu mouse olayları ve doğrudan click() tetikle
+    for (const el of clickTargets) {
+      try {
+        el.dispatchEvent(new MouseEvent('mouseover', opts));
+        el.dispatchEvent(new MouseEvent('mousedown', opts));
+        el.dispatchEvent(new MouseEvent('mouseup', opts));
+        el.dispatchEvent(new MouseEvent('click', opts));
+        if (typeof el.click === 'function') el.click();
+      } catch (_) {}
+    }
+
+    // 6. Masaüstü YouTube Music web standardı: Çift tıklama dispatch et
+    try {
+      target.dispatchEvent(new MouseEvent('dblclick', opts));
+      if (root && root.querySelector('#layout')) {
+        root.querySelector('#layout').dispatchEvent(new MouseEvent('dblclick', opts));
+      }
+    } catch (_) {}
+
+    return true;
   }
 
   // -------------------------------------------------------------
   // NORMAL YOUTUBE.COM ÇALMA LİSTESİNDE ŞARKIYA GEÇİŞ
   // -------------------------------------------------------------
-  function jumpToYtVideoQueueIndex(targetIdx) {
-    const queueItems = document.querySelectorAll('ytd-playlist-panel-video-renderer');
-    if (queueItems && queueItems[targetIdx]) {
-      const target = queueItems[targetIdx];
+  function jumpToYtVideoQueueIndex(param) {
+    let targetIdx = -1;
+    let targetTitle = '';
+
+    if (typeof param === 'object' && param !== null) {
+      targetIdx = typeof param.index === 'number' ? param.index : -1;
+      targetTitle = (param.title || '').trim().toLowerCase();
+    } else if (typeof param === 'number') {
+      targetIdx = param;
+    } else if (typeof param === 'string' && !isNaN(Number(param)) && param.trim() !== '') {
+      targetIdx = Number(param);
+    } else if (typeof param === 'string') {
+      targetTitle = param.trim().toLowerCase();
+    }
+
+    const queueItems = Array.from(document.querySelectorAll('ytd-playlist-panel-video-renderer'));
+    if (!queueItems || queueItems.length === 0) return false;
+
+    let target = null;
+    if (targetTitle) {
+      target = queueItems.find(el => {
+        const tEl = el.querySelector('#video-title');
+        const txt = (tEl ? tEl.textContent : '').trim().toLowerCase();
+        return txt && (txt === targetTitle || txt.includes(targetTitle) || targetTitle.includes(txt));
+      });
+    }
+
+    if (!target && targetIdx >= 0 && targetIdx < queueItems.length) {
+      target = queueItems[targetIdx];
+    }
+
+    if (target) {
       try {
-        target.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        target.scrollIntoView({ block: 'nearest', behavior: 'instant' });
       } catch (_) {}
 
-      const link = target.querySelector('a#wc-endpoint, a.yt-simple-endpoint, a#thumbnail') || target;
+      const link = target.querySelector('a#wc-endpoint, a.yt-simple-endpoint, a#thumbnail, a') || target;
       const href = link.href || (target.querySelector('a') ? target.querySelector('a').href : null);
+      const opts = { bubbles: true, cancelable: true, view: window, buttons: 1, composed: true };
 
-      // 1. Mouse event'leri tetikle
-      const opts = { bubbles: true, cancelable: true, view: window, buttons: 1 };
       link.dispatchEvent(new MouseEvent('mousedown', opts));
       link.dispatchEvent(new MouseEvent('mouseup', opts));
       link.dispatchEvent(new MouseEvent('click', opts));
       try { link.click(); } catch (_) {}
 
-      // 2. Eğer YouTube SPA tıklamayı yutarsa doğrudan o videonun URL'sine git
       if (href && !href.includes('javascript:')) {
         setTimeout(() => {
           if (!window.location.href.includes(href)) {
@@ -186,7 +302,9 @@
           }
         }, 120);
       }
+      return true;
     }
+    return false;
   }
 
   // -------------------------------------------------------------
@@ -198,16 +316,16 @@
     video._mbListenersAttached = true;
 
     const handleTrackEnd = () => {
-      if (pendingNextTrackIndex !== null && pendingNextTrackIndex >= 0) {
-        const nextIdx = pendingNextTrackIndex;
-        pendingNextTrackIndex = null;
-        console.log('🎵 MusicBridge: Parça bitti, belirlenen sıradaki şarkıya geçiliyor:', nextIdx);
+      if (pendingNextTrackData !== null) {
+        const nextData = pendingNextTrackData;
+        pendingNextTrackData = null;
+        console.log('🎵 MusicBridge: Parça bitti, belirlenen sıradaki şarkıya geçiliyor:', nextData);
 
         const host = window.location.hostname;
         if (host.includes('music.youtube.com')) {
-          jumpToYtMusicQueueIndex(nextIdx);
+          jumpToYtMusicQueueIndex(nextData);
         } else if (host.includes('youtube.com')) {
-          jumpToYtVideoQueueIndex(nextIdx);
+          jumpToYtVideoQueueIndex(nextData);
         }
       }
     };
@@ -215,10 +333,10 @@
     // 1. Video bittiğinde anında tetikle
     video.addEventListener('ended', handleTrackEnd);
 
-    // 2. Video bitimine 0.8 sn kala (YouTube otomatik sonraki videoyu açmadan önce bizimkini açar)
+    // 2. Video bitimine 1.0 sn kala (YouTube varsayılan rastgele sonrakine geçmeden önce)
     video.addEventListener('timeupdate', () => {
-      if (pendingNextTrackIndex !== null && video.duration > 0) {
-        if (video.currentTime >= video.duration - 0.8) {
+      if (pendingNextTrackData !== null && video.duration > 0) {
+        if (video.currentTime >= video.duration - 1.0) {
           handleTrackEnd();
         }
       }
@@ -363,8 +481,13 @@
   // -------------------------------------------------------------
   function sendToCore(payload) {
     if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-      chrome.runtime.sendMessage(payload, () => {
+      chrome.runtime.sendMessage(payload, (res) => {
         if (chrome.runtime.lastError) {}
+        if (res && res.data && Array.isArray(res.data.commands) && res.data.commands.length > 0) {
+          for (const cmd of res.data.commands) {
+            executeCommand(cmd.action, cmd.data);
+          }
+        }
       });
     }
   }

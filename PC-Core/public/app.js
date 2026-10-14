@@ -622,9 +622,16 @@ function jumpToQueueIndex(targetIdx) {
   isJumpingTrack = true;
   setTimeout(() => { isJumpingTrack = false; }, 800);
 
+  const queueItem = rawQueueItems[targetIdx];
+  const payload = {
+    index: targetIdx,
+    title: queueItem ? queueItem.title : '',
+    artist: queueItem ? queueItem.artist : ''
+  };
+
   // Tarayıcı eklentisine doğrudan anında çalma komutu gönder
-  sendCmd('seekToQueueIndex', targetIdx);
-  showToast('▶ Parçaya geçiliyor...');
+  sendCmd('seekToQueueIndex', payload);
+  showToast(queueItem && queueItem.title ? `▶ ${queueItem.title} çalınıyor...` : '▶ Parçaya geçiliyor...');
 }
 
 // 2. "Sıradaki Yap / Bundan Devam Et": Bu şarkı bittikten sonra bundan devam et
@@ -632,16 +639,23 @@ function setNextInQueue(targetIdx) {
   if (pendingNextTrackIndex === targetIdx) {
     // Tıklanırsa iptal et
     pendingNextTrackIndex = null;
-    sendCmd('setNextTrackIndex', -1);
+    sendCmd('setNextTrackIndex', null);
     renderQueue(rawQueueItems);
     showToast('Sıradaki parça seçimi kaldırıldı.');
     return;
   }
 
   pendingNextTrackIndex = targetIdx;
-  sendCmd('setNextTrackIndex', targetIdx);
+  const queueItem = rawQueueItems[targetIdx];
+  const payload = {
+    index: targetIdx,
+    title: queueItem ? queueItem.title : '',
+    artist: queueItem ? queueItem.artist : ''
+  };
+
+  sendCmd('setNextTrackIndex', payload);
   renderQueue(rawQueueItems);
-  showToast(`⏭️ Sıraya alındı: Mevcut parça bitince ${targetIdx + 1}. parçadan devam edecek.`);
+  showToast(`⏭️ Sıraya alındı: Mevcut parça bitince "${queueItem ? queueItem.title : (targetIdx + 1) + '. parça'}" çalacak.`);
 }
 
 // Kuyruk Render
