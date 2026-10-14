@@ -144,13 +144,16 @@
         target.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       } catch (_) {}
       
-      // Öğeye veya oynat butonuna tıkla
-      const playBtn = target.querySelector('.play-button, tp-yt-paper-icon-button, .content-wrapper, .left-items') || target;
-      playBtn.click();
+      // 1. Tıklanabilir olası butonları bul (Play butonu, thumbnail veya eleman)
+      const playBtn = target.querySelector('ytmusic-play-button-renderer #button, #play-button, .play-button, tp-yt-paper-icon-button, .left-items, .thumbnail-container') || target;
       
-      // Bazı YouTube Music sürümlerinde double-click veya custom dispatch gerekir
-      const clickEvt = new MouseEvent('click', { bubbles: true, cancelable: true, view: window });
-      target.dispatchEvent(clickEvt);
+      // 2. Çoklu mouse event dispatch (YouTube Music web component'leri için)
+      const opts = { bubbles: true, cancelable: true, view: window, buttons: 1 };
+      playBtn.dispatchEvent(new MouseEvent('mousedown', opts));
+      playBtn.dispatchEvent(new MouseEvent('mouseup', opts));
+      playBtn.dispatchEvent(new MouseEvent('click', opts));
+      try { playBtn.click(); } catch (_) {}
+      target.dispatchEvent(new MouseEvent('dblclick', opts));
     }
   }
 
@@ -165,9 +168,61 @@
         target.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       } catch (_) {}
 
-      const link = target.querySelector('a#wc-endpoint, a.yt-simple-endpoint') || target;
-      link.click();
+      const link = target.querySelector('a#wc-endpoint, a.yt-simple-endpoint, a#thumbnail') || target;
+      const href = link.href || (target.querySelector('a') ? target.querySelector('a').href : null);
+
+      // 1. Mouse event'leri tetikle
+      const opts = { bubbles: true, cancelable: true, view: window, buttons: 1 };
+      link.dispatchEvent(new MouseEvent('mousedown', opts));
+      link.dispatchEvent(new MouseEvent('mouseup', opts));
+      link.dispatchEvent(new MouseEvent('click', opts));
+      try { link.click(); } catch (_) {}
+
+      // 2. Eğer YouTube SPA tıklamayı yutarsa doğrudan o videonun URL'sine git
+      if (href && !href.includes('javascript:')) {
+        setTimeout(() => {
+          if (!window.location.href.includes(href)) {
+            window.location.href = href;
+          }
+        }, 120);
+      }
     }
+  }
+
+  // -------------------------------------------------------------
+  // OTOMATİK SIRADAKİ PARÇAYA GEÇİŞ DİNLEYİCİSİ (0 Gecikmeli)
+  // -------------------------------------------------------------
+  function attachVideoListeners() {
+    const video = document.querySelector('video');
+    if (!video || video._mbListenersAttached) return;
+    video._mbListenersAttached = true;
+
+    const handleTrackEnd = () => {
+      if (pendingNextTrackIndex !== null && pendingNextTrackIndex >= 0) {
+        const nextIdx = pendingNextTrackIndex;
+        pendingNextTrackIndex = null;
+        console.log('🎵 MusicBridge: Parça bitti, belirlenen sıradaki şarkıya geçiliyor:', nextIdx);
+
+        const host = window.location.hostname;
+        if (host.includes('music.youtube.com')) {
+          jumpToYtMusicQueueIndex(nextIdx);
+        } else if (host.includes('youtube.com')) {
+          jumpToYtVideoQueueIndex(nextIdx);
+        }
+      }
+    };
+
+    // 1. Video bittiğinde anında tetikle
+    video.addEventListener('ended', handleTrackEnd);
+
+    // 2. Video bitimine 0.8 sn kala (YouTube otomatik sonraki videoyu açmadan önce bizimkini açar)
+    video.addEventListener('timeupdate', () => {
+      if (pendingNextTrackIndex !== null && video.duration > 0) {
+        if (video.currentTime >= video.duration - 0.8) {
+          handleTrackEnd();
+        }
+      }
+    });
   }
 
   // Sayfa içi küçük bildirim göster
@@ -318,6 +373,7 @@
   // PERİYODİK MEDYA DURUMU TAKİBİ (1 sn)
   // -------------------------------------------------------------
   setInterval(() => {
+    attachVideoListeners();
     const host = window.location.hostname;
     let trackInfo = null;
 

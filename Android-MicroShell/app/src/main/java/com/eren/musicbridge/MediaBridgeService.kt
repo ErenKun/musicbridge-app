@@ -40,8 +40,6 @@ class MediaBridgeService : Service() {
     private var lastArtist: String = ""
     private var lastIsPlaying: Boolean = false
     private var wasPlayingBeforeCall: Boolean = false
-    private var telephonyManager: android.telephony.TelephonyManager? = null
-    private var phoneStateListener: android.telephony.PhoneStateListener? = null
 
     companion object {
         const val CHANNEL_ID = "musicbridge_playback_channel"
@@ -380,41 +378,10 @@ class MediaBridgeService : Service() {
     private var audioFocusChangeListener: android.media.AudioManager.OnAudioFocusChangeListener? = null
 
     /**
-     * Telefon caldiginda veya WhatsApp/VoIP aramasi geldiginde muzigi otomatik duraklatir,
-     * gorusme bitince devam ettirir (Smart Call & WhatsApp Auto-Pause).
+     * Telefon caldiginda (GSM) veya WhatsApp/Telegram/VoIP aramasi geldiginde
+     * muzigi sifir izin ile otomatik duraklatir, gorusme bitince devam ettirir.
      */
-    @Suppress("DEPRECATION")
     private fun initCallStateListener() {
-        // 1. GSM Hücresel Arama Dinleyicisi
-        try {
-            telephonyManager = getSystemService(Context.TELEPHONY_SERVICE) as? android.telephony.TelephonyManager
-            phoneStateListener = object : android.telephony.PhoneStateListener() {
-                override fun onCallStateChanged(state: Int, phoneNumber: String?) {
-                    when (state) {
-                        android.telephony.TelephonyManager.CALL_STATE_RINGING,
-                        android.telephony.TelephonyManager.CALL_STATE_OFFHOOK -> {
-                            if (lastIsPlaying) {
-                                wasPlayingBeforeCall = true
-                                updatePlaybackStateOnly(false)
-                                sendMediaCommandToPc("pause")
-                            }
-                        }
-                        android.telephony.TelephonyManager.CALL_STATE_IDLE -> {
-                            if (wasPlayingBeforeCall) {
-                                wasPlayingBeforeCall = false
-                                updatePlaybackStateOnly(true)
-                                sendMediaCommandToPc("play")
-                            }
-                        }
-                    }
-                }
-            }
-            phoneStateListener?.let {
-                telephonyManager?.listen(it, android.telephony.PhoneStateListener.LISTEN_CALL_STATE)
-            }
-        } catch (e: Exception) {}
-
-        // 2. WhatsApp / Telegram / VoIP İnternet Aramaları Dinleyicisi (Ses Odağı)
         try {
             audioManager = getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
             audioFocusChangeListener = android.media.AudioManager.OnAudioFocusChangeListener { focusChange ->
@@ -422,7 +389,7 @@ class MediaBridgeService : Service() {
                     android.media.AudioManager.AUDIOFOCUS_LOSS,
                     android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
                     android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                        // WhatsApp veya VoIP aramasi ses odagini aldi, muzigi duraklat
+                        // GSM cagrisi veya WhatsApp/Telegram aramasi ses odagini aldi, PC muzigini duraklat
                         if (lastIsPlaying) {
                             wasPlayingBeforeCall = true
                             updatePlaybackStateOnly(false)
@@ -430,7 +397,7 @@ class MediaBridgeService : Service() {
                         }
                     }
                     android.media.AudioManager.AUDIOFOCUS_GAIN -> {
-                        // Arama bitti, ses odagi geri geldi
+                        // Arama sonlandi, ses odagi bize geri verildi, PC muzigini devam ettir
                         if (wasPlayingBeforeCall) {
                             wasPlayingBeforeCall = false
                             updatePlaybackStateOnly(true)
@@ -440,13 +407,19 @@ class MediaBridgeService : Service() {
                 }
             }
 
-            // Baslangicta ses odagi dinleyicisini bagla
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val playbackAttributes = android.media.AudioAttributes.Builder()
+                    .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build()
                 val focusRequest = android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN)
+                    .setAudioAttributes(playbackAttributes)
+                    .setAcceptsDelayedFocusGain(true)
                     .setOnAudioFocusChangeListener(audioFocusChangeListener!!)
                     .build()
                 audioManager?.requestAudioFocus(focusRequest)
             } else {
+                @Suppress("DEPRECATION")
                 audioManager?.requestAudioFocus(
                     audioFocusChangeListener,
                     android.media.AudioManager.STREAM_MUSIC,
@@ -551,9 +524,6 @@ class MediaBridgeService : Service() {
         instance = null
         backgroundSyncJob?.cancel()
         try {
-            phoneStateListener?.let {
-                telephonyManager?.listen(it, android.telephony.PhoneStateListener.LISTEN_NONE)
-            }
             audioFocusChangeListener?.let {
                 audioManager?.abandonAudioFocus(it)
             }

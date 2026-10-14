@@ -93,9 +93,6 @@ class MainActivity : AppCompatActivity() {
             if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
                 permissionsToRequest.add(android.Manifest.permission.POST_NOTIFICATIONS)
             }
-            if (checkSelfPermission(android.Manifest.permission.READ_PHONE_STATE) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                permissionsToRequest.add(android.Manifest.permission.READ_PHONE_STATE)
-            }
             if (permissionsToRequest.isNotEmpty()) {
                 requestPermissions(permissionsToRequest.toTypedArray(), 1001)
             }
