@@ -246,20 +246,25 @@ class MediaBridgeService : Service() {
                 PowerManager.PARTIAL_WAKE_LOCK,
                 "MusicBridge:MediaCommandWakeLock"
             )
-            try {
+                val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                val token = prefs.getString("auth_token", "") ?: ""
+
                 wakeLock?.acquire(3000)
                 val url = URL("$serverBaseUrl/api/control")
                 val conn = url.openConnection() as HttpURLConnection
                 conn.requestMethod = "POST"
                 conn.setRequestProperty("Content-Type", "application/json")
+                if (token.isNotBlank()) {
+                    conn.setRequestProperty("Authorization", "Bearer $token")
+                }
                 conn.doOutput = true
                 conn.connectTimeout = 2000
                 conn.readTimeout = 2000
 
                 val body = if (data != null) {
-                    "{\"action\":\"$action\",\"data\":$data}"
+                    "{\"action\":\"$action\",\"data\":$data,\"token\":\"$token\"}"
                 } else {
-                    "{\"action\":\"$action\"}"
+                    "{\"action\":\"$action\",\"token\":\"$token\"}"
                 }
                 OutputStreamWriter(conn.outputStream).use { it.write(body) }
                 conn.responseCode

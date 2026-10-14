@@ -5,16 +5,18 @@
   "description": "YouTube Music, Spotify ve SoundCloud'u MusicBridge PC Core ile bağlar. Eren Teknoloji.",
   "author": "Eren Teknoloji",
   "permissions": [
-    "storage"
+    "tabs"
   ],
   "host_permissions": [
     "https://music.youtube.com/*",
+    "https://www.youtube.com/*",
+    "https://youtube.com/*",
     "https://open.spotify.com/*",
     "https://soundcloud.com/*",
-    "http://localhost:8765/*",
-    "http://127.0.0.1:8765/*",
-    "ws://localhost:8765/*",
-    "ws://127.0.0.1:8765/*"
+    "http://localhost:*/*",
+    "http://127.0.0.1:*/*",
+    "ws://localhost:*/*",
+    "ws://127.0.0.1:*/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -23,6 +25,8 @@
     {
       "matches": [
         "https://music.youtube.com/*",
+        "https://www.youtube.com/*",
+        "https://youtube.com/*",
         "https://open.spotify.com/*",
         "https://soundcloud.com/*"
       ],

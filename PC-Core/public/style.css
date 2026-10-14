@@ -1685,3 +1685,237 @@ input:checked + .slider:before {
   color: #34d399;
   line-height: 1.5;
 }
+
+/* ------------------------------------------------------------- */
+/* GÜVENLİK PIN DOĞRULAMA MODALİ (SIFIR-GÜVEN AĞ KORUMASI) */
+/* ------------------------------------------------------------- */
+.pin-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 12, 24, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pin-modal-overlay.show {
+  opacity: 1;
+  visibility: visible;
+}
+
+.pin-modal-card {
+  background: #16192b;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 24px;
+  max-width: 380px;
+  width: 100%;
+  padding: 28px 24px;
+  text-align: center;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), 0 0 30px rgba(99, 102, 241, 0.2);
+  transform: scale(0.92);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pin-modal-overlay.show .pin-modal-card {
+  transform: scale(1);
+}
+
+.pin-badge-icon {
+  font-size: 2.4rem;
+  margin-bottom: 12px;
+  display: inline-block;
+  background: rgba(99, 102, 241, 0.15);
+  width: 64px;
+  height: 64px;
+  line-height: 64px;
+  border-radius: 50%;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.pin-modal-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 8px;
+}
+
+.pin-modal-desc {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+
+.pin-modal-desc strong {
+  color: #818cf8;
+}
+
+.pin-input-group {
+  margin-bottom: 14px;
+}
+
+.pin-input {
+  width: 160px;
+  height: 52px;
+  font-size: 1.8rem;
+  letter-spacing: 12px;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.35);
+  border: 2px solid rgba(99, 102, 241, 0.4);
+  border-radius: 14px;
+  color: #fff;
+  font-family: monospace;
+  font-weight: 700;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.pin-input:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 16px rgba(99, 102, 241, 0.4);
+}
+
+.pin-remember-row {
+  margin-bottom: 14px;
+  display: flex;
+  justify-content: center;
+}
+
+.pin-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.pin-checkbox-label input {
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+.pin-error-text {
+  font-size: 0.8rem;
+  color: #ef4444;
+  margin-bottom: 12px;
+  min-height: 18px;
+  font-weight: 500;
+}
+
+.btn-pin-submit {
+  width: 100%;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white;
+  border: none;
+  padding: 13px 20px;
+  border-radius: 14px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.2s;
+  box-shadow: 0 6px 18px rgba(99, 102, 241, 0.35);
+}
+
+.btn-pin-submit:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(99, 102, 241, 0.5);
+}
+
+.pin-modal-footer {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.3);
+  margin-top: 16px;
+}
+
+/* ------------------------------------------------------------- */
+/* KUYRUK: SIRADA ÇAL & HEMEN ÇAL BUTONLARI */
+/* ------------------------------------------------------------- */
+.queue-btn-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-next-up {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 5px 9px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btn-next-up:hover {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: #6366f1;
+  color: #818cf8;
+}
+
+.btn-next-up.active {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: #10b981;
+  color: #34d399;
+}
+
+.next-up-tag {
+  font-size: 0.65rem;
+  font-weight: 700;
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  padding: 2px 6px;
+  border-radius: 6px;
+  margin-left: 6px;
+}
+
+.queue-item.next-up {
+  border-left: 3px solid #10b981;
+}
+
+/* ------------------------------------------------------------- */
+/* ŞARKI SÖZLERİ ARAMA BARI */
+/* ------------------------------------------------------------- */
+.lyrics-search-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.lyrics-search-input {
+  flex: 1;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  color: var(--text-main);
+  outline: none;
+}
+
+.lyrics-search-input:focus {
+  border-color: var(--accent);
+}
+
+.btn-search-lyrics {
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+

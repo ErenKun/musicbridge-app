@@ -1,20 +1,117 @@
-// MusicBridge Browser Extension - Background Service Worker
-chrome.runtime.onInstalled.addListener(() => {
-  console.log('🎵 MusicBridge Web Controller Eklentisi Yüklendi!');
-});
+// MusicBridge Browser Extension - Background Service Worker (Bi-directional Bridge)
+// Eren Teknoloji - 2026
 
-// Content Script'ten gelen güncellemeleri arka plan yetkisiyle PC-Core'a ilet
-// Background Service Worker web sayfasının CSP ve Mixed-Content kısıtlamalarına tabi DEĞİLDİR.
+let ws = null;
+let currentPort = 8765;
+let reconnectTimer = null;
+let isConnected = false;
+
+function connectCoreWs() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
+
+  try {
+    ws = new WebSocket(`ws://127.0.0.1:${currentPort}`);
+
+    ws.onopen = () => {
+      isConnected = true;
+      console.log(`🎵 MusicBridge PC Core WebSocket Bağlantısı Başarılı (Port: ${currentPort})`);
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'browser-command') {
+          // Komutu ilgili müzik sekmelerine dağıt
+          broadcastCommandToTabs(msg);
+        }
+      } catch (_) {}
+    };
+
+    ws.onclose = () => {
+      isConnected = false;
+      ws = null;
+      // 3 saniye sonra yeniden bağlanmayı dene
+      reconnectTimer = setTimeout(connectCoreWs, 3000);
+    };
+
+    ws.onerror = () => {
+      // Eğer varsayılan portta hata aldıysa bir sonraki portu dene (8765 -> 8766 -> 8765)
+      currentPort = currentPort === 8765 ? 8766 : 8765;
+      if (ws) {
+        try { ws.close(); } catch (_) {}
+        ws = null;
+      }
+    };
+  } catch (_) {
+    reconnectTimer = setTimeout(connectCoreWs, 3000);
+  }
+}
+
+connectCoreWs();
+
+// Gelen komutları (seekToQueueIndex, playNext, playPause vb.) açık müzik sekmelerine ilet
+function broadcastCommandToTabs(msg) {
+  if (!chrome.tabs) return;
+  chrome.tabs.query({}, (tabs) => {
+    for (const tab of tabs) {
+      if (tab.id && tab.url && (
+        tab.url.includes('music.youtube.com') ||
+        tab.url.includes('youtube.com') ||
+        tab.url.includes('spotify.com') ||
+        tab.url.includes('soundcloud.com')
+      )) {
+        chrome.tabs.sendMessage(tab.id, msg).catch(() => {});
+      }
+    }
+  });
+}
+
+// Content Script'ten gelen güncellemeleri PC Core'a ilet
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message && message.type === 'BROWSER_UPDATE') {
-    fetch('http://127.0.0.1:8765/api/browser-update', {
+  if (!message) return;
+
+  if (message.type === 'BROWSER_UPDATE' || message.type === 'LYRICS_UPDATE') {
+    // 1. WebSocket açıksa doğrudan ve anında WS üzerinden gönder (0 gecikme)
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(JSON.stringify({
+          action: message.type === 'LYRICS_UPDATE' ? 'lyrics-update' : 'browser-update',
+          data: message.data
+        }));
+        sendResponse({ success: true, via: 'ws' });
+        return true;
+      } catch (_) {}
+    }
+
+    // 2. WebSocket kapalıysa HTTP POST ile ilet
+    const endpoint = message.type === 'LYRICS_UPDATE' ? '/api/lyrics/update' : '/api/browser-update';
+    fetch(`http://127.0.0.1:${currentPort}${endpoint}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(message.data)
     })
       .then(res => res.json())
-      .then(data => sendResponse({ success: true, data }))
-      .catch(err => sendResponse({ success: false, error: err.message }));
-    return true; // Asenkron yanıt için true dönülmeli
+      .then(data => sendResponse({ success: true, via: 'http', data }))
+      .catch(err => {
+        // Yedek portu da dene
+        const altPort = currentPort === 8765 ? 8766 : 8765;
+        fetch(`http://127.0.0.1:${altPort}${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(message.data)
+        })
+          .then(res => res.json())
+          .then(data => sendResponse({ success: true, via: 'http-alt', data }))
+          .catch(e => sendResponse({ success: false, error: e.message }));
+      });
+
+    return true; // Asenkron yanıt
   }
 });

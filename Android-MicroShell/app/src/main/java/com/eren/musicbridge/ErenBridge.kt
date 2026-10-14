@@ -65,4 +65,16 @@ class ErenBridge(private val context: Context) {
         prefs.edit().putBoolean("volume_sync_enabled", enabled).apply()
         MediaBridgeService.instance?.setVolumeSyncEnabled(enabled)
     }
+
+    @JavascriptInterface
+    fun saveAuthToken(token: String) {
+        val prefs = context.getSharedPreferences("MusicBridgePrefs", Context.MODE_PRIVATE)
+        prefs.edit().putString("auth_token", token).apply()
+    }
+
+    @JavascriptInterface
+    fun getAuthToken(): String {
+        val prefs = context.getSharedPreferences("MusicBridgePrefs", Context.MODE_PRIVATE)
+        return prefs.getString("auth_token", "") ?: ""
+    }
 }

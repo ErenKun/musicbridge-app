@@ -8,7 +8,7 @@ echo ==============================================================
 echo.
 echo Calisan MusicBridge surecleri kapaniyor...
 
-powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*server.js*' -or $_.CommandLine -like '*windows-media-bridge.ps1*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
+powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*server.js*' -or $_.CommandLine -like '*windows-media-bridge.ps1*' -or $_.CommandLine -like '*MusicBridge-Tray.ps1*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
 
 echo.
 echo [TAMAMLANDI] MusicBridge ve tum bagli surecler durduruldu.

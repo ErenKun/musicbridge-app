@@ -7,6 +7,9 @@ let lastServerSyncSec = 0;
 let lastSyncTimestamp = performance.now();
 let isSeeking = false;
 let seekTimeout = null;
+let authToken = localStorage.getItem('mb_auth_token') || '';
+let isAuthModalOpen = false;
+let pendingNextTrackIndex = null;
 
 const DEFAULT_ARTWORK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24'%3E%3Cpath fill='%236366f1' d='M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z'/%3E%3C/svg%3E";
 
@@ -69,6 +72,75 @@ function showToast(message) {
 }
 
 // -------------------------------------------------------------
+// GÜVENLİK PIN DOĞRULAMA (SIFIR-GÜVEN KORUMASI)
+// -------------------------------------------------------------
+function showPinModal(errorText = '') {
+  const modal = document.getElementById('pin-modal');
+  const errorEl = document.getElementById('pin-error-msg');
+  const input = document.getElementById('pin-input');
+  if (modal) {
+    modal.classList.add('show');
+    isAuthModalOpen = true;
+    if (errorEl) errorEl.innerText = errorText;
+    if (input) {
+      input.value = '';
+      setTimeout(() => input.focus(), 250);
+    }
+  }
+}
+
+function hidePinModal() {
+  const modal = document.getElementById('pin-modal');
+  if (modal) {
+    modal.classList.remove('show');
+    isAuthModalOpen = false;
+  }
+}
+
+async function submitPinAuth() {
+  const input = document.getElementById('pin-input');
+  const rememberCheck = document.getElementById('pin-remember-check');
+  const errorEl = document.getElementById('pin-error-msg');
+  if (!input) return;
+
+  const pinVal = input.value.trim();
+  if (!pinVal) {
+    if (errorEl) errorEl.innerText = 'Lütfen 4 haneli PIN kodunu girin.';
+    return;
+  }
+
+  if (errorEl) errorEl.innerText = 'Doğrulanıyor...';
+
+  try {
+    const res = await fetch('/api/auth/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: pinVal, remember: rememberCheck ? rememberCheck.checked : true })
+    });
+    const data = await res.json();
+    if (data.success && data.token) {
+      authToken = data.token;
+      if (!rememberCheck || rememberCheck.checked) {
+        localStorage.setItem('mb_auth_token', authToken);
+      }
+      if (window.ErenBridge && typeof window.ErenBridge.saveAuthToken === 'function') {
+        try { window.ErenBridge.saveAuthToken(authToken); } catch(_) {}
+      }
+      hidePinModal();
+      showToast('✅ Doğrulama Başarılı! Cihaz eşleştirildi.');
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ action: 'auth', token: authToken }));
+      }
+      fetchCurrentState();
+    } else {
+      if (errorEl) errorEl.innerText = data.error || 'Hatalı PIN kodu!';
+    }
+  } catch (err) {
+    if (errorEl) errorEl.innerText = 'Bağlantı hatası: ' + err.message;
+  }
+}
+
+// -------------------------------------------------------------
 // AKILLI ARKA PLAN / ÖN PLAN BAĞLANTI & SENKRONİZASYON MOTORU
 // -------------------------------------------------------------
 let reconnectTimer = null;
@@ -83,13 +155,28 @@ async function fetchCurrentState(isRetry = false) {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 2500);
+    const headers = { 'Cache-Control': 'no-store' };
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+
     const res = await fetch('/api/status', {
       cache: 'no-store',
+      headers,
       signal: controller.signal
     });
     clearTimeout(timeoutId);
     if (res.ok) {
       const json = await res.json();
+      if (json.requiresPin && !isAuthModalOpen) {
+        showPinModal();
+      } else if (json.isAuthorized) {
+        hidePinModal();
+      }
+
+      if (json.pin) {
+        const pinEl = document.getElementById('net-pin');
+        if (pinEl) pinEl.innerText = json.pin;
+      }
+
       if (json.media) {
         updateUI(json.media);
       }
@@ -175,6 +262,9 @@ function connectWebSocket(forceNew = false) {
     updateConnBadge(true);
     fetchNetworkStatus();
     try {
+      if (authToken) {
+        ws.send(JSON.stringify({ action: 'auth', token: authToken }));
+      }
       ws.send(JSON.stringify({ action: 'sync' }));
     } catch (_) {}
   };
@@ -183,6 +273,18 @@ function connectWebSocket(forceNew = false) {
     lastWsMessageTime = performance.now();
     try {
       const msg = JSON.parse(event.data);
+      if (msg.type === 'auth-required') {
+        showPinModal('PIN doğrulaması gerekli.');
+        return;
+      }
+      if (msg.type === 'auth-success') {
+        hidePinModal();
+        return;
+      }
+      if (msg.type === 'lyrics-change' && msg.data) {
+        renderLyrics(msg.data);
+        return;
+      }
       if (msg.type === 'sync' || msg.type === 'track-change') {
         updateUI(msg.data);
       }
@@ -390,13 +492,23 @@ function sendCmd(action, data = null) {
     }
   }
 
+  const payload = { action, data, token: authToken };
+
   if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ action, data }));
+    ws.send(JSON.stringify(payload));
   } else {
     fetch('/api/control', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, data })
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': authToken ? `Bearer ${authToken}` : ''
+      },
+      body: JSON.stringify(payload)
+    }).then(async res => {
+      if (res.status === 401) {
+        const d = await res.json().catch(() => ({}));
+        if (d.needAuth) showPinModal('Bu işlemi yapmak için lütfen PIN kodunu doğrulayın.');
+      }
     }).catch(() => {});
   }
 }
@@ -457,8 +569,10 @@ function clearQueueSearch() {
   filterQueue('');
 }
 
-// Akıllı Kuyruk Atlama Algoritması
+// Akıllı Kuyruk Atlama & Sıradaki Parça Motoru
 let isJumpingTrack = false;
+
+// 1. Şarkının üstüne tıklandığında O ŞARKIYA HEMEN GEÇ
 function jumpToQueueIndex(targetIdx) {
   if (isJumpingTrack) return;
   if (targetIdx === currentQueueActiveIndex) {
@@ -469,9 +583,26 @@ function jumpToQueueIndex(targetIdx) {
   isJumpingTrack = true;
   setTimeout(() => { isJumpingTrack = false; }, 800);
 
-  // Tarayıcı eklentisine doğrudan indeks atlama komutu gönder
+  // Tarayıcı eklentisine doğrudan anında çalma komutu gönder
   sendCmd('seekToQueueIndex', targetIdx);
   showToast('▶ Parçaya geçiliyor...');
+}
+
+// 2. "Sıradaki Yap / Bundan Devam Et": Bu şarkı bittikten sonra bundan devam et
+function setNextInQueue(targetIdx) {
+  if (pendingNextTrackIndex === targetIdx) {
+    // Tıklanırsa iptal et
+    pendingNextTrackIndex = null;
+    sendCmd('setNextTrackIndex', -1);
+    renderQueue(rawQueueItems);
+    showToast('Sıradaki parça seçimi kaldırıldı.');
+    return;
+  }
+
+  pendingNextTrackIndex = targetIdx;
+  sendCmd('setNextTrackIndex', targetIdx);
+  renderQueue(rawQueueItems);
+  showToast(`⏭️ Sıraya alındı: Mevcut parça bitince ${targetIdx + 1}. parçadan devam edecek.`);
 }
 
 // Kuyruk Render
@@ -496,7 +627,7 @@ function renderQueue(queueItems) {
     badgeEl.style.color = isRec ? '#f59e0b' : '#818cf8';
   }
 
-  // 1. Yinelenen parçaları temizle (Peş peşe gelen birebir aynı kayıtlar)
+  // 1. Yinelenen parçaları temizle
   const deduplicated = [];
   for (let i = 0; i < rawQueueItems.length; i++) {
     const item = rawQueueItems[i];
@@ -504,7 +635,7 @@ function renderQueue(queueItems) {
     if (prev && prev.title && item.title &&
         prev.title.trim().toLowerCase() === item.title.trim().toLowerCase() &&
         (prev.artist || '').trim().toLowerCase() === (item.artist || '').trim().toLowerCase()) {
-      continue; // Yineleneni filtrele
+      continue;
     }
     deduplicated.push({ ...item, originalIndex: i });
   }
@@ -514,10 +645,7 @@ function renderQueue(queueItems) {
   const curArtist = (currentTrack.artist || '').trim().toLowerCase();
   currentQueueActiveIndex = -1;
 
-  // Öncelik 1: Eklentinin bildirdiği isCurrent bayrağı
   let foundIdx = deduplicated.findIndex(it => it.isCurrent);
-
-  // Öncelik 2: Birebir başlık & sanatçı eşleşmesi
   if (foundIdx === -1 && curTitle && !curTitle.includes('bekleniyor')) {
     foundIdx = deduplicated.findIndex(it => {
       const t = (it.title || '').trim().toLowerCase();
@@ -525,15 +653,12 @@ function renderQueue(queueItems) {
       return (t === curTitle && (!curArtist || !a || a.includes(curArtist) || curArtist.includes(a)));
     });
   }
-
-  // Öncelik 3: Kısmi başlık eşleşmesi
   if (foundIdx === -1 && curTitle && !curTitle.includes('bekleniyor')) {
     foundIdx = deduplicated.findIndex(it => {
       const t = (it.title || '').trim().toLowerCase();
       return t && (curTitle.includes(t) || t.includes(curTitle));
     });
   }
-
   if (foundIdx !== -1) {
     currentQueueActiveIndex = deduplicated[foundIdx].originalIndex;
   }
@@ -558,11 +683,12 @@ function renderQueue(queueItems) {
   container.innerHTML = displayItems.map((item, displayIdx) => {
     const isPlaying = (foundIdx !== -1 && deduplicated[foundIdx] === item);
     const targetIndex = item.originalIndex;
+    const isNextUp = (pendingNextTrackIndex === targetIndex);
     const durationStr = item.duration ? (typeof item.duration === 'number' ? formatTime(item.duration) : item.duration) : '';
     const itemNumber = displayIdx + 1;
 
     return `
-      <div class="queue-item ${isPlaying ? 'playing' : ''}" onclick="jumpToQueueIndex(${targetIndex})" title="${isPlaying ? 'Şu an çalıyor' : 'Bu parçayı çal'}">
+      <div class="queue-item ${isPlaying ? 'playing' : ''} ${isNextUp ? 'next-up' : ''}" onclick="jumpToQueueIndex(${targetIndex})" title="${isPlaying ? 'Şu an çalıyor' : 'Hemen çalmak için tıklayın'}">
         <div class="queue-item-left">
           <span class="queue-index-badge">${itemNumber}</span>
           <div class="eq-bars">
@@ -574,6 +700,7 @@ function renderQueue(queueItems) {
             <div class="queue-item-title-row">
               <span class="queue-item-title">${escapeHtml(item.title || 'İsimsiz')}</span>
               ${isPlaying ? '<span class="now-playing-tag">Çalıyor</span>' : ''}
+              ${isNextUp ? '<span class="next-up-tag">⏭️ Sıradaki</span>' : ''}
             </div>
             <div class="queue-item-sub">${escapeHtml(item.artist || 'Bilinmiyor')}</div>
           </div>
@@ -581,9 +708,14 @@ function renderQueue(queueItems) {
         <div class="queue-item-right">
           ${durationStr ? `<span class="queue-duration">${durationStr}</span>` : ''}
           ${!isPlaying ? `
-            <button class="btn-jump" onclick="event.stopPropagation(); jumpToQueueIndex(${targetIndex})" title="Bu parçaya atla">
-              ▶ Atla
-            </button>
+            <div class="queue-btn-group">
+              <button class="btn-next-up ${isNextUp ? 'active' : ''}" onclick="event.stopPropagation(); setNextInQueue(${targetIndex})" title="Bu şarkı bittikten sonra bundan devam et">
+                ${isNextUp ? '✓ Sırada' : '⏭️ Sıradaki Yap'}
+              </button>
+              <button class="btn-jump" onclick="event.stopPropagation(); jumpToQueueIndex(${targetIndex})" title="Hemen şimdi çal">
+                ▶ Hemen Çal
+              </button>
+            </div>
           ` : ''}
         </div>
       </div>
@@ -665,6 +797,46 @@ function parseLrc(lrcText) {
   return result;
 }
 
+function requestBrowserLyrics() {
+  sendCmd('getLyrics');
+  showToast('🎵 YouTube Music sözleri taranıyor...');
+  const contentEl = document.getElementById('lyrics-content');
+  if (contentEl) contentEl.innerHTML = '<p class="lyrics-loading">YouTube Music sözleri taranıyor...</p>';
+  setTimeout(() => {
+    fetchCurrentLyrics(true);
+  }, 1200);
+}
+
+async function searchCustomLyrics() {
+  const input = document.getElementById('lyrics-search-input');
+  if (!input) return;
+  const q = input.value.trim();
+  if (!q) {
+    showToast('Lütfen aranacak şarkı veya türkü adını yazın.');
+    return;
+  }
+
+  const contentEl = document.getElementById('lyrics-content');
+  const titleEl = document.getElementById('lyrics-track-title');
+  const artistEl = document.getElementById('lyrics-track-artist');
+
+  if (titleEl) titleEl.innerText = q;
+  if (artistEl) artistEl.innerText = 'Özel Arama';
+  if (contentEl) contentEl.innerHTML = '<p class="lyrics-loading">Sözler aranıyor...</p>';
+
+  try {
+    const res = await fetch(`/api/lyrics?title=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    if (data.lyrics && (data.lyrics.plainLyrics || data.lyrics.syncedLyrics)) {
+      renderLyrics(data.lyrics);
+    } else {
+      renderLyrics({ plainLyrics: 'Aramanız için şarkı sözü bulunamadı.' });
+    }
+  } catch (err) {
+    renderLyrics({ plainLyrics: 'Arama yapılırken hata oluştu: ' + err.message });
+  }
+}
+
 function renderLyrics(lyrics) {
   const contentEl = document.getElementById('lyrics-content');
   const badgeEl = document.getElementById('lyrics-badge');
@@ -683,7 +855,7 @@ function renderLyrics(lyrics) {
   } else if (lyrics.plainLyrics) {
     parsedSyncedLyrics = [];
     if (badgeEl) {
-      badgeEl.innerText = 'Düz Metin';
+      badgeEl.innerText = lyrics.source ? `🎵 ${lyrics.source}` : 'Musixmatch / Düz Metin';
       badgeEl.style.color = '#818cf8';
     }
     contentEl.innerHTML = `<div class="lyrics-plain">${escapeHtml(lyrics.plainLyrics)}</div>`;
@@ -1243,6 +1415,9 @@ setInterval(() => {
 
 // Başlat
 window.addEventListener('DOMContentLoaded', () => {
+  if (!authToken && window.ErenBridge && typeof window.ErenBridge.getAuthToken === 'function') {
+    try { authToken = window.ErenBridge.getAuthToken() || ''; } catch(_) {}
+  }
   fetchCurrentState(); // Sayfa açılır açılmaz anında ilk veriyi getir
   initVolumeSync();    // Donanım / Akıllı saat ses senkronu butonunu yükle
   connectWebSocket();

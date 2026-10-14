@@ -21,7 +21,8 @@ if (fs.existsSync(configPath)) {
   }
 }
 
-const PORT = config.server.http_port || 8765;
+const DEFAULT_PORT = config.server.http_port || 8765;
+let ACTIVE_PORT = DEFAULT_PORT;
 const TH_CH_URL = config.youtube_music.th_ch_api_url || 'http://127.0.0.1:13091';
 
 // Aktif medya durumu
@@ -43,9 +44,44 @@ let currentState = {
   pinnedSource: 'auto'
 };
 
-// Güvenlik PIN Kodu ve Yetkilendirme
+// Güvenlik PIN Kodu ve Yetkilendirme (Sıfır-Güven Ağ Modeli)
 let serverPin = (config.server && config.server.pin) ? String(config.server.pin) : String(Math.floor(1000 + Math.random() * 9000));
+const tokensFilePath = path.join(__dirname, 'authorized_tokens.json');
 const authorizedTokens = new Set();
+
+try {
+  if (fs.existsSync(tokensFilePath)) {
+    const saved = JSON.parse(fs.readFileSync(tokensFilePath, 'utf8'));
+    if (Array.isArray(saved)) saved.forEach(t => authorizedTokens.add(t));
+  }
+} catch (_) {}
+
+function saveAuthorizedTokens() {
+  try {
+    fs.writeFileSync(tokensFilePath, JSON.stringify([...authorizedTokens]), 'utf8');
+  } catch (_) {}
+}
+
+function isLocalhost(req) {
+  const clientIp = req.socket?.remoteAddress || '';
+  return clientIp === '127.0.0.1' || clientIp === '::1' || clientIp.includes('127.0.0.1') || clientIp === '::ffff:127.0.0.1';
+}
+
+function isClientAuthorized(req, body = null) {
+  if (isLocalhost(req)) return true;
+  const authHeader = req.headers['authorization'] || '';
+  let token = '';
+  if (authHeader.startsWith('Bearer ')) {
+    token = authHeader.substring(7).trim();
+  } else if (req.headers['x-auth-token']) {
+    token = String(req.headers['x-auth-token']).trim();
+  } else if (body && body.token) {
+    token = String(body.token).trim();
+  }
+  return !!(token && authorizedTokens.has(token));
+}
+
+let lastExtractedLyrics = null;
 
 // Windows Başlangıç Kısayolu Yolu
 const startupDir = path.join(
@@ -378,7 +414,7 @@ function startUdpDiscoveryServer() {
       const text = msg.toString('utf8').trim();
       if (text.startsWith('MUSICBRIDGE_DISCOVERY_PING')) {
         const hostName = os.hostname();
-        const responseMsg = `MUSICBRIDGE_DISCOVERY_PONG|${PORT}|${hostName}`;
+        const responseMsg = `MUSICBRIDGE_DISCOVERY_PONG|${ACTIVE_PORT}|${hostName}`;
         udpServer.send(responseMsg, rinfo.port, rinfo.address, () => {});
       }
     });
@@ -533,13 +569,19 @@ const server = http.createServer((req, res) => {
 
   // API Uç Noktaları
   if (url.pathname === '/api/status') {
+    const isLocal = isLocalhost(req);
+    const isAuth = isClientAuthorized(req);
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({
       status: 'online',
       media: currentState,
       network: getNetworkIps(),
       startup: getStartupStatus(),
-      pin: serverPin
+      port: ACTIVE_PORT,
+      isLocalhost: isLocal,
+      isAuthorized: isLocal || isAuth,
+      requiresPin: !isLocal && !isAuth,
+      pin: (isLocal || isAuth) ? serverPin : undefined
     }));
     return;
   }
@@ -550,15 +592,18 @@ const server = http.createServer((req, res) => {
     req.on('data', chunk => { body += chunk; });
     req.on('end', () => {
       try {
-        const { pin } = JSON.parse(body);
+        const { pin, remember } = JSON.parse(body);
         if (String(pin).trim() === serverPin) {
           const token = 'mb_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
           authorizedTokens.add(token);
+          if (remember !== false) {
+            saveAuthorizedTokens();
+          }
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-          res.end(JSON.stringify({ success: true, token }));
+          res.end(JSON.stringify({ success: true, token, port: ACTIVE_PORT }));
         } else {
           res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
-          res.end(JSON.stringify({ success: false, error: 'Hatalı PIN kodu!' }));
+          res.end(JSON.stringify({ success: false, error: 'Hatalı PIN kodu! Bilgisayarınızın ekranındaki veya sistem tepsisindeki 4 haneli PIN\'i girin.' }));
         }
       } catch (e) {
         res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -594,6 +639,11 @@ const server = http.createServer((req, res) => {
 
   // Sunucuyu Güvenli Kapat
   if (url.pathname === '/api/system/shutdown' && req.method === 'POST') {
+    if (!isClientAuthorized(req)) {
+      res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Yetkisiz erişim' }));
+      return;
+    }
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ success: true, message: 'Sunucu kapatılıyor...' }));
     setTimeout(() => {
@@ -629,16 +679,33 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Senkronize Şarkı Sözleri (LRCLIB API)
+  // Senkronize ve Canlı Şarkı Sözleri (YouTube Music DOM + LRCLIB Entegrasyonu)
   if (url.pathname === '/api/lyrics') {
-    const title = url.searchParams.get('title') || currentState.title;
-    const artist = url.searchParams.get('artist') || currentState.artist;
-    fetchLyrics(title, artist)
-      .then(lyrics => {
+    const title = (url.searchParams.get('title') || currentState.title || '').trim();
+    const artist = (url.searchParams.get('artist') || currentState.artist || '').trim();
+
+    // 1. Önce YouTube Music eklentisinin canlı çektiği sözleri kontrol et (Musixmatch kalitesi)
+    if (lastExtractedLyrics && lastExtractedLyrics.plainLyrics) {
+      const cleanReq = title.toLowerCase().replace(/\(.*?\)|\[.*?\]/g, '').trim();
+      const cleanLrc = (lastExtractedLyrics.title || '').toLowerCase().replace(/\(.*?\)|\[.*?\]/g, '').trim();
+      if (!cleanReq || !cleanLrc || cleanReq.includes(cleanLrc) || cleanLrc.includes(cleanReq)) {
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({
           success: true,
-          lyrics: lyrics || { plainLyrics: 'Şarkı sözü bulunamadı.', syncedLyrics: '' }
+          lyrics: lastExtractedLyrics
+        }));
+        return;
+      }
+    }
+
+    // 2. Canlı senkronize sözler için LRCLIB veya fallback motoru
+    fetchLyrics(title, artist)
+      .then(lyrics => {
+        const finalLyrics = lyrics || (lastExtractedLyrics && lastExtractedLyrics.plainLyrics ? lastExtractedLyrics : { plainLyrics: 'Şarkı sözü bulunamadı.', syncedLyrics: '' });
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({
+          success: true,
+          lyrics: finalLyrics
         }));
       })
       .catch(err => {
@@ -648,13 +715,39 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Eklentiden doğrudan söz iletimi (POST)
+  if (url.pathname === '/api/lyrics/update' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const data = JSON.parse(body);
+        if (data && data.plainLyrics) {
+          lastExtractedLyrics = {
+            ...data,
+            title: currentState.title,
+            artist: currentState.artist,
+            timestamp: Date.now()
+          };
+          broadcast({ type: 'lyrics-change', data: lastExtractedLyrics });
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ success: true }));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
+
   // Sıfır-Konfigürasyon Keşif Bilgisi
   if (url.pathname === '/api/discovery') {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({
       service: 'musicbridge',
       version: '2.0.0',
-      port: PORT,
+      port: ACTIVE_PORT,
       hostname: os.hostname(),
       ips: getNetworkIps()
     }));
@@ -667,6 +760,11 @@ const server = http.createServer((req, res) => {
     req.on('end', async () => {
       try {
         const cmd = JSON.parse(body);
+        if (!isClientAuthorized(req, cmd)) {
+          res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ success: false, error: 'PIN doğrulaması gerekli', needAuth: true }));
+          return;
+        }
         await executeMediaCommand(cmd.action, cmd.data);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ success: true }));
@@ -678,7 +776,7 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Tarayıcı eklentisinden (Userscript) gelen durum güncellemesi
+  // Tarayıcı eklentisinden durum güncellemesi
   if (url.pathname === '/api/browser-update' && req.method === 'POST') {
     let body = '';
     req.on('data', chunk => { body += chunk; });
@@ -728,14 +826,30 @@ const server = http.createServer((req, res) => {
 // WebSocket Sunucusu
 const wss = new WebSocketServer({ server });
 
-wss.on('connection', ws => {
-  ws.send(JSON.stringify({ type: 'sync', data: currentState }));
+wss.on('connection', (ws, req) => {
+  const isLocal = isLocalhost(req);
+  ws.isAuthorized = isLocal;
+
+  ws.send(JSON.stringify({
+    type: 'sync',
+    data: currentState,
+    isAuthorized: ws.isAuthorized
+  }));
 
   ws.on('message', async message => {
     try {
       const msg = JSON.parse(message);
+      if (msg.action === 'auth') {
+        if (msg.token && authorizedTokens.has(msg.token)) {
+          ws.isAuthorized = true;
+          ws.send(JSON.stringify({ type: 'auth-success' }));
+        } else {
+          ws.send(JSON.stringify({ type: 'auth-failed', error: 'Geçersiz Token' }));
+        }
+        return;
+      }
       if (msg.action === 'sync') {
-        ws.send(JSON.stringify({ type: 'sync', data: currentState }));
+        ws.send(JSON.stringify({ type: 'sync', data: currentState, isAuthorized: ws.isAuthorized }));
         return;
       }
       if (msg.action === 'ping') {
@@ -746,7 +860,24 @@ wss.on('connection', ws => {
         updateStateFromBrowser(msg.data);
         return;
       }
+      if (msg.action === 'lyrics-update') {
+        if (msg.data && msg.data.plainLyrics) {
+          lastExtractedLyrics = {
+            ...msg.data,
+            title: currentState.title,
+            artist: currentState.artist,
+            timestamp: Date.now()
+          };
+          broadcast({ type: 'lyrics-change', data: lastExtractedLyrics });
+        }
+        return;
+      }
       if (msg.action) {
+        // Yetkisiz istemcilerin komut çalıştırmasını engelle
+        if (!ws.isAuthorized) {
+          ws.send(JSON.stringify({ type: 'auth-required', error: 'PIN doğrulaması gerekli' }));
+          return;
+        }
         await executeMediaCommand(msg.action, msg.data);
       }
     } catch (err) {
@@ -765,7 +896,7 @@ function broadcast(data) {
   });
 }
 
-// Komut yürütme (Windows GSMTC + Master Ses + th-ch API + Userscript)
+// Komut yürütme (Windows GSMTC + Master Ses + th-ch API + Userscript/Extension)
 async function executeMediaCommand(action, data) {
   // 1. Yerel Windows Medya & Master Ses Köprüsü
   if (psProcess && psProcess.stdin && psProcess.stdin.writable) {
@@ -822,10 +953,8 @@ async function executeMediaCommand(action, data) {
     }).catch(() => {});
   } catch (err) {}
 
-  // 3. Tarayıcı Eklentisine YALNIZCA eklentiye özel komutları ilet (seekToQueueIndex vb.)
-  // Generic oynatma komutları (playPause, next, previous) Windows GSMTC tarafından işletilir.
-  // Her ikisinin aynı anda tetiklenmesi çifte komuta (2 kez basma / jitter) yol açar.
-  if (action === 'seekToQueueIndex') {
+  // 3. Tarayıcı Eklentisine eklentiye özel komutları ilet (seekToQueueIndex, setNextTrackIndex, getLyrics)
+  if (action === 'seekToQueueIndex' || action === 'setNextTrackIndex' || action === 'getLyrics') {
     broadcast({ type: 'browser-command', action, data });
   }
 }
@@ -867,10 +996,19 @@ function updateStateFromBrowser(data) {
     changed = true;
   }
 
-  // 3. Eğer yerel Windows GSMTC henüz müzik yakalamadıysa (Boşta ise),
+  // 3. Eklentiden gelen şarkı sözleri (YouTube Music DOM / Musixmatch)
+  if (data.lyrics && (data.lyrics.plainLyrics || data.lyrics.syncedLyrics)) {
+    lastExtractedLyrics = {
+      ...data.lyrics,
+      title: data.title || currentState.title,
+      artist: data.artist || currentState.artist,
+      timestamp: Date.now()
+    };
+    broadcast({ type: 'lyrics-change', data: lastExtractedLyrics });
+  }
+
+  // 4. Eğer yerel Windows GSMTC henüz müzik yakalamadıysa (Boşta ise),
   // tarayıcı eklentisinin verisini yedek olarak ana duruma yaz.
-  // Ancak Windows GSMTC zaten bir oturum takip ediyorsa, başlık ve durumların
-  // birbiriyle yarışıp ekranı ve sekmeleri titretmesini engellemek için GSMTC tek gerçek kaynaktır!
   const isGsmtcActive = currentState.sourceApp && currentState.sourceApp !== 'Boşta' && !currentState.title.includes('Bekleniyor');
   if (!isGsmtcActive) {
     if (data.title && currentState.title !== data.title) {
@@ -892,25 +1030,68 @@ function updateStateFromBrowser(data) {
 // 2 saniyede bir masaüstü th-ch kuyruk kontrolü
 setInterval(pollThChApi, 2000);
 
-// Sunucuyu başlat ve Windows Medya Köprüsünü ayağa kaldır
-server.listen(PORT, '0.0.0.0', () => {
-  const ips = getNetworkIps();
-  console.log('\n=============================================================');
-  console.log('🎵 MusicBridge PC Core - Eren Teknoloji Aktif!');
-  console.log('=============================================================');
-  console.log(`📡 Yerel Ağ (Ev Wi-Fi) Adresi : http://${ips.lan[0] || 'localhost'}:${PORT}`);
-  if (ips.tailscale.length > 0) {
-    console.log(`🌐 Tailscale (Her Yerden) Adresi: http://${ips.tailscale[0]}:${PORT}`);
-  } else {
-    console.log('🌐 Tailscale IP tespit edilmedi (Aktif olduğunda otomatik tanınır)');
-  }
-  console.log(`💻 Windows Başlangıç Durumu   : ${getStartupStatus() ? 'Açık (Otomatik Başlatılıyor)' : 'Kapalı'}`);
-  console.log(`💻 Yerel Windows Medya Desteği : Aktif (Sıfır Eklenti & Tam Otomatik)`);
-  console.log('=============================================================\n');
+// Sistem Tepsisi (Tray) simgesinin çalıştığından kesinlikle emin ol
+function ensureTrayRunning() {
+  const trayScriptPath = path.join(__dirname, 'MusicBridge-Tray.ps1');
+  if (!fs.existsSync(trayScriptPath)) return;
 
-  // Windows yerel medya köprüsünü başlat
-  startWindowsMediaBridge();
+  try {
+    const checkCmd = 'powershell.exe -NoProfile -Command "(Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like \'*MusicBridge-Tray.ps1*\' }).ProcessId"';
+    const output = execSync(checkCmd, { windowsHide: true, encoding: 'utf8' }).trim();
+    if (!output) {
+      console.log('📌 Sistem Tepsisi (Tray) simgesi arka planda başlatılıyor...');
+      spawn('powershell.exe', [
+        '-NoProfile',
+        '-ExecutionPolicy', 'Bypass',
+        '-WindowStyle', 'Hidden',
+        '-File', trayScriptPath
+      ], {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true
+      }).unref();
+    }
+  } catch (_) {}
+}
 
-  // Sıfır-konfigürasyon otomatik cihaz keşfini başlat (UDP port 8766)
-  startUdpDiscoveryServer();
-});
+// Sunucuyu başlat (Port doluysa otomatik bir sonrakine geçerek çökme yaşatmaz)
+function startServer(portToTry) {
+  server.removeAllListeners('error');
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.warn(`[MusicBridge] Port ${portToTry} kullanımda, ${portToTry + 1} portu deneniyor...`);
+      startServer(portToTry + 1);
+    } else {
+      console.error('[MusicBridge] Sunucu başlatma hatası:', err.message);
+    }
+  });
+
+  server.listen(portToTry, '0.0.0.0', () => {
+    ACTIVE_PORT = portToTry;
+    const ips = getNetworkIps();
+    console.log('\n=============================================================');
+    console.log('🎵 MusicBridge PC Core - Eren Teknoloji Aktif!');
+    console.log('=============================================================');
+    console.log(`📡 Yerel Ağ (Ev Wi-Fi) Adresi : http://${ips.lan[0] || 'localhost'}:${ACTIVE_PORT}`);
+    if (ips.tailscale.length > 0) {
+      console.log(`🌐 Tailscale (Her Yerden) Adresi: http://${ips.tailscale[0]}:${ACTIVE_PORT}`);
+    } else {
+      console.log('🌐 Tailscale IP tespit edilmedi (Aktif olduğunda otomatik tanınır)');
+    }
+    console.log(`🔑 Güvenlik PIN Kodu          : ${serverPin}`);
+    console.log(`💻 Windows Başlangıç Durumu   : ${getStartupStatus() ? 'Açık (Otomatik Başlatılıyor)' : 'Kapalı'}`);
+    console.log(`💻 Yerel Windows Medya Desteği : Aktif (Sıfır Eklenti & Tam Otomatik)`);
+    console.log('=============================================================\n');
+
+    // Windows yerel medya köprüsünü başlat
+    startWindowsMediaBridge();
+
+    // Sıfır-konfigürasyon otomatik cihaz keşfini başlat (UDP port 8766)
+    startUdpDiscoveryServer();
+
+    // Sistem Tepsisi (Tray) simgesini başlat
+    ensureTrayRunning();
+  });
+}
+
+startServer(DEFAULT_PORT);

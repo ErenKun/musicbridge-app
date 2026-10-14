@@ -176,14 +176,21 @@
       </div>
     </section>
 
-    <!-- GÖRÜNÜM 3: ŞARKI SÖZLERİ (LRCLIB ENTEGRASYONU) -->
+    <!-- GÖRÜNÜM 3: ŞARKI SÖZLERİ (YOUTUBE MUSIC & LRCLIB ENTEGRASYONU) -->
     <section id="lyrics-view" class="view">
       <div class="lyrics-header">
         <div>
           <h3>Şarkı Sözleri</h3>
           <span class="lyrics-badge" id="lyrics-badge">Canlı Senkron</span>
         </div>
-        <button class="btn-icon" onclick="fetchCurrentLyrics(true)" title="Sözleri Yenile">🔄</button>
+        <div style="display: flex; gap: 6px;">
+          <button class="btn-icon" onclick="requestBrowserLyrics()" title="YouTube Music'ten Sözleri Çek">🎵 YT'den Al</button>
+          <button class="btn-icon" onclick="fetchCurrentLyrics(true)" title="Sözleri Yenile">🔄</button>
+        </div>
+      </div>
+      <div class="lyrics-search-row">
+        <input type="text" id="lyrics-search-input" class="lyrics-search-input" placeholder="Şarkı veya türkü sözü ara (örn: Dertli Divani Yazık Sana)..." onkeyup="if(event.key==='Enter') searchCustomLyrics()">
+        <button class="btn-search-lyrics" onclick="searchCustomLyrics()">Ara</button>
       </div>
       <div class="lyrics-card" id="lyrics-card">
         <div class="lyrics-song-info" id="lyrics-song-info">
@@ -379,6 +386,31 @@
 
         <div class="guide-footer-tip">
           💡 <strong>İpucu:</strong> Bir kere bağlandıktan sonra telefonunuz bu adresi hatırlar; dışarı çıktığınızda sadece telefonunuzdaki Tailscale'i açmanız yeterlidir!
+        </div>
+      </div>
+    </div>
+
+    <!-- GÜVENLİK PIN DOĞRULAMA MODALİ (SIFIR-GÜVEN KORUMASI) -->
+    <div id="pin-modal" class="pin-modal-overlay">
+      <div class="pin-modal-card">
+        <div class="pin-badge-icon">🔒</div>
+        <h2 class="pin-modal-title">Cihaz Doğrulama</h2>
+        <p class="pin-modal-desc">
+          Müziği uzaktan kontrol edebilmek için bilgisayarınızın ekranında veya sağ alttaki sistem tepsisinde (Tray) görünen <strong>4 haneli PIN kodunu</strong> girin:
+        </p>
+        <div class="pin-input-group">
+          <input type="text" maxlength="4" id="pin-input" class="pin-input" placeholder="••••" autocomplete="off" inputmode="numeric" onkeyup="if(event.key==='Enter') submitPinAuth()">
+        </div>
+        <div class="pin-remember-row">
+          <label class="pin-checkbox-label">
+            <input type="checkbox" id="pin-remember-check" checked>
+            <span>Bu cihazı / tarayıcıyı hatırla</span>
+          </label>
+        </div>
+        <div id="pin-error-msg" class="pin-error-text"></div>
+        <button class="btn-pin-submit" onclick="submitPinAuth()">Kilidi Aç & Bağlan ➔</button>
+        <div class="pin-modal-footer">
+          🛡️ Eren Teknoloji Sıfır-Güven Ağ Koruması
         </div>
       </div>
     </div>

@@ -11,9 +11,31 @@ Set-Location $scriptDir
 $existing = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*server.js*' }
 if (-not $existing) {
     Start-Process -FilePath "node.exe" -ArgumentList "server.js" -WorkingDirectory $scriptDir -WindowStyle Hidden
+    Start-Sleep -Milliseconds 800
 }
 
-# 2. System Tray Bilesenleri
+# 2. Aktif Port ve PIN Kodunu Tespit Et
+$activePort = 8765
+$serverPin = "----"
+
+function RefreshServerInfo {
+    global:activePort
+    global:serverPin
+    foreach ($p in 8765..8775) {
+        try {
+            $status = Invoke-RestMethod -Uri "http://127.0.0.1:$p/api/status" -TimeoutSec 1 -ErrorAction Stop
+            if ($status.status -eq "online") {
+                $global:activePort = $p
+                if ($status.pin) { $global:serverPin = $status.pin }
+                break
+            }
+        } catch {}
+    }
+}
+
+RefreshServerInfo
+
+# 3. System Tray Bilesenleri
 $notifyIcon = New-Object System.Windows.Forms.NotifyIcon
 $contextMenu = New-Object System.Windows.Forms.ContextMenuStrip
 
@@ -40,13 +62,25 @@ $titleItem.Text = "MusicBridge PC Core (Aktif)"
 $titleItem.Enabled = $false
 $contextMenu.Items.Add($titleItem) | Out-Null
 
+# Guvenlik PIN Elemani (Tiklayinca panoya kopyalar)
+$pinItem = New-Object System.Windows.Forms.ToolStripMenuItem
+$pinItem.Text = "🔑 Guvenlik PIN: $serverPin (Kopyala)"
+$pinItem.Font = New-Object System.Drawing.Font($pinItem.Font, [System.Drawing.FontStyle]::Bold)
+$pinItem.add_Click({
+    RefreshServerInfo
+    [System.Windows.Forms.Clipboard]::SetText($global:serverPin)
+    $notifyIcon.ShowBalloonTip(2000, "MusicBridge PIN", "Guvenlik PIN kodu panoya kopyalandi: $($global:serverPin)", [System.Windows.Forms.ToolTipIcon]::Info)
+})
+$contextMenu.Items.Add($pinItem) | Out-Null
+
 $contextMenu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator)) | Out-Null
 
 # Web Arayuzunu Ac
 $openWebItem = New-Object System.Windows.Forms.ToolStripMenuItem
-$openWebItem.Text = "Web Arayuzunu Ac (localhost:8765)"
+$openWebItem.Text = "Web Arayuzunu Ac (localhost:$activePort)"
 $openWebItem.add_Click({
-    Start-Process "http://localhost:8765"
+    RefreshServerInfo
+    Start-Process "http://localhost:$global:activePort"
 })
 $contextMenu.Items.Add($openWebItem) | Out-Null
 
@@ -54,13 +88,15 @@ $contextMenu.Items.Add($openWebItem) | Out-Null
 $copyIpItem = New-Object System.Windows.Forms.ToolStripMenuItem
 $copyIpItem.Text = "Baglanti Adresini Kopyala"
 $copyIpItem.add_Click({
+    RefreshServerInfo
     try {
-        $res = Invoke-RestMethod -Uri "http://localhost:8765/api/status" -TimeoutSec 2
+        $res = Invoke-RestMethod -Uri "http://127.0.0.1:$global:activePort/api/status" -TimeoutSec 2
         $ip = if ($res.network.lan.Count -gt 0) { $res.network.lan[0] } else { "localhost" }
-        [System.Windows.Forms.Clipboard]::SetText("http://$ip:8765")
-        $notifyIcon.ShowBalloonTip(2000, "MusicBridge", "Adres panoya kopyalandi: http://$ip:8765", [System.Windows.Forms.ToolTipIcon]::Info)
+        $fullUrl = "http://$ip`:$global:activePort"
+        [System.Windows.Forms.Clipboard]::SetText($fullUrl)
+        $notifyIcon.ShowBalloonTip(2000, "MusicBridge", "Adres panoya kopyalandi: $fullUrl", [System.Windows.Forms.ToolTipIcon]::Info)
     } catch {
-        [System.Windows.Forms.Clipboard]::SetText("http://localhost:8765")
+        [System.Windows.Forms.Clipboard]::SetText("http://localhost:$global:activePort")
     }
 })
 $contextMenu.Items.Add($copyIpItem) | Out-Null
@@ -100,19 +136,31 @@ $exitItem.Text = "MusicBridge'i Kapat"
 $exitItem.add_Click({
     $notifyIcon.Visible = $false
     # Server ve bagli surecleri sonlandir
-    Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*server.js*' -or $_.CommandLine -like '*windows-media-bridge.ps1*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    Get-CimInstance Win32_Process | Where-Object { 
+        $_.CommandLine -like '*server.js*' -or 
+        $_.CommandLine -like '*windows-media-bridge.ps1*' -or 
+        ($_.CommandLine -like '*MusicBridge-Tray.ps1*' -and $_.ProcessId -ne $PID)
+    } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
     [System.Windows.Forms.Application]::Exit()
 })
 $contextMenu.Items.Add($exitItem) | Out-Null
+
+# Menu acilmadan hemen once PIN ve Portu guncelle
+$contextMenu.add_Opening({
+    RefreshServerInfo
+    $pinItem.Text = "🔑 Guvenlik PIN: $global:serverPin (Kopyala)"
+    $openWebItem.Text = "Web Arayuzunu Ac (localhost:$global:activePort)"
+})
 
 $notifyIcon.ContextMenuStrip = $contextMenu
 
 # Cift tiklandiginda web oynatici acilsin
 $notifyIcon.add_DoubleClick({
-    Start-Process "http://localhost:8765"
+    RefreshServerInfo
+    Start-Process "http://localhost:$global:activePort"
 })
 
-$notifyIcon.ShowBalloonTip(2500, "MusicBridge Aktif!", "MusicBridge arka planda calisiyor. Tiklayarak acabilirsiniz.", [System.Windows.Forms.ToolTipIcon]::Info)
+$notifyIcon.ShowBalloonTip(2500, "MusicBridge Aktif!", "🔑 PIN: $serverPin`nTiklayarak arayuzu acabilirsiniz.", [System.Windows.Forms.ToolTipIcon]::Info)
 
 # Mesaj dongusu
 [System.Windows.Forms.Application]::Run()

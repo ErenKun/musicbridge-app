@@ -4,16 +4,23 @@
 (function() {
   'use strict';
 
-  const CORE_WS_URL = 'ws://localhost:8765';
-  let ws = null;
-  let isConnected = false;
+  let pendingNextTrackIndex = null;
+  let lastReportedVideoId = '';
 
+  // 1. Background Service Worker'dan gelen komutları dinle
+  if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
+    chrome.runtime.onMessage.addListener((message) => {
+      if (message && message.type === 'browser-command') {
+        executeCommand(message.action, message.data);
+      }
+    });
+  }
+
+  // 2. Yedek Doğrudan WebSocket Bağlantısı
+  let ws = null;
   function connectWs() {
     try {
-      ws = new WebSocket(CORE_WS_URL);
-      ws.onopen = () => {
-        isConnected = true;
-      };
+      ws = new WebSocket('ws://localhost:8765');
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
@@ -23,21 +30,23 @@
         } catch (_) {}
       };
       ws.onclose = () => {
-        isConnected = false;
-        setTimeout(connectWs, 3000);
+        ws = null;
+        setTimeout(connectWs, 5000);
       };
       ws.onerror = () => {
         ws = null;
       };
     } catch (_) {}
   }
-
   connectWs();
 
+  // -------------------------------------------------------------
+  // KOMUT YÜRÜTME MOTORU
+  // -------------------------------------------------------------
   function executeCommand(action, data) {
     const host = window.location.hostname;
 
-    // 1. YouTube Music Kontrolleri
+    // A. YouTube Music Kontrolleri
     if (host.includes('music.youtube.com')) {
       const video = document.querySelector('video');
       if (!video) return;
@@ -49,28 +58,53 @@
       } else if (action === 'pause') {
         video.pause();
       } else if (action === 'next') {
-        const nextBtn = document.querySelector('.next-button') || document.querySelector('tp-yt-paper-icon-button.next-button');
+        const nextBtn = document.querySelector('.next-button, tp-yt-paper-icon-button.next-button');
         if (nextBtn) nextBtn.click();
       } else if (action === 'previous') {
-        const prevBtn = document.querySelector('.previous-button') || document.querySelector('tp-yt-paper-icon-button.previous-button');
+        const prevBtn = document.querySelector('.previous-button, tp-yt-paper-icon-button.previous-button');
         if (prevBtn) prevBtn.click();
       } else if (action === 'seekTo') {
         video.currentTime = Number(data);
       } else if (action === 'seekToQueueIndex') {
-        const queueItems = document.querySelectorAll('ytmusic-player-queue-item');
-        const targetIdx = Number(data);
-        if (queueItems && queueItems[targetIdx]) {
-          const target = queueItems[targetIdx];
-          try {
-            target.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-          } catch (_) {}
-          const playBtn = target.querySelector('.play-button') || target.querySelector('tp-yt-paper-icon-button') || target;
-          playBtn.click();
-        }
+        // Doğrudan tıklayıp hemen o şarkıya geç
+        jumpToYtMusicQueueIndex(Number(data));
+      } else if (action === 'setNextTrackIndex') {
+        // Bu şarkı bitince bundan devam et (Sırada Çal)
+        pendingNextTrackIndex = Number(data);
+        showOnPageNotification(`⏭️ Sıradaki şarkı belirlendi (${pendingNextTrackIndex + 1}. parça)`);
+      } else if (action === 'getLyrics') {
+        loadAndSendYtMusicLyrics();
       }
     }
 
-    // 2. Spotify Web Kontrolleri
+    // B. Normal YouTube.com Kontrolleri (Çalma Listesi & Video)
+    else if (host.includes('youtube.com') && !host.includes('music.youtube.com')) {
+      const video = document.querySelector('video');
+      if (!video) return;
+
+      if (action === 'playPause') {
+        if (video.paused) video.play(); else video.pause();
+      } else if (action === 'play') {
+        video.play();
+      } else if (action === 'pause') {
+        video.pause();
+      } else if (action === 'next') {
+        const nextBtn = document.querySelector('.ytp-next-button, a.ytp-next-button');
+        if (nextBtn) nextBtn.click();
+      } else if (action === 'previous') {
+        const prevBtn = document.querySelector('.ytp-prev-button, a.ytp-prev-button');
+        if (prevBtn) prevBtn.click();
+      } else if (action === 'seekTo') {
+        video.currentTime = Number(data);
+      } else if (action === 'seekToQueueIndex') {
+        jumpToYtVideoQueueIndex(Number(data));
+      } else if (action === 'setNextTrackIndex') {
+        pendingNextTrackIndex = Number(data);
+        showOnPageNotification(`⏭️ Sıradaki video belirlendi (${pendingNextTrackIndex + 1}. sıra)`);
+      }
+    }
+
+    // C. Spotify Web Kontrolleri
     else if (host.includes('spotify.com')) {
       if (action === 'playPause' || action === 'play' || action === 'pause') {
         const playBtn = document.querySelector('[data-testid="control-button-playpause"]');
@@ -84,7 +118,7 @@
       }
     }
 
-    // 3. SoundCloud Kontrolleri
+    // D. SoundCloud Kontrolleri
     else if (host.includes('soundcloud.com')) {
       if (action === 'playPause' || action === 'play' || action === 'pause') {
         const playBtn = document.querySelector('.playControl');
@@ -99,8 +133,121 @@
     }
   }
 
-  // YouTube Music Çalma Listesini ve Kuyruğunu Çek
-  function extractYtQueue() {
+  // -------------------------------------------------------------
+  // YOUTUBE MUSIC KUYRUK & ŞARKI DEĞİŞTİRME
+  // -------------------------------------------------------------
+  function jumpToYtMusicQueueIndex(targetIdx) {
+    const queueItems = document.querySelectorAll('ytmusic-player-queue-item');
+    if (queueItems && queueItems[targetIdx]) {
+      const target = queueItems[targetIdx];
+      try {
+        target.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      } catch (_) {}
+      
+      // Öğeye veya oynat butonuna tıkla
+      const playBtn = target.querySelector('.play-button, tp-yt-paper-icon-button, .content-wrapper, .left-items') || target;
+      playBtn.click();
+      
+      // Bazı YouTube Music sürümlerinde double-click veya custom dispatch gerekir
+      const clickEvt = new MouseEvent('click', { bubbles: true, cancelable: true, view: window });
+      target.dispatchEvent(clickEvt);
+    }
+  }
+
+  // -------------------------------------------------------------
+  // NORMAL YOUTUBE.COM ÇALMA LİSTESİNDE ŞARKIYA GEÇİŞ
+  // -------------------------------------------------------------
+  function jumpToYtVideoQueueIndex(targetIdx) {
+    const queueItems = document.querySelectorAll('ytd-playlist-panel-video-renderer');
+    if (queueItems && queueItems[targetIdx]) {
+      const target = queueItems[targetIdx];
+      try {
+        target.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      } catch (_) {}
+
+      const link = target.querySelector('a#wc-endpoint, a.yt-simple-endpoint') || target;
+      link.click();
+    }
+  }
+
+  // Sayfa içi küçük bildirim göster
+  function showOnPageNotification(text) {
+    let toast = document.getElementById('musicbridge-notif');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'musicbridge-notif';
+      toast.style.cssText = 'position:fixed;bottom:80px;right:24px;background:#6366f1;color:#fff;padding:10px 18px;border-radius:12px;font-size:13px;font-weight:600;z-index:999999;box-shadow:0 8px 24px rgba(0,0,0,0.5);transition:opacity 0.3s;pointer-events:none;font-family:sans-serif;';
+      document.body.appendChild(toast);
+    }
+    toast.innerText = text;
+    toast.style.opacity = '1';
+    setTimeout(() => { if (toast) toast.style.opacity = '0'; }, 2500);
+  }
+
+  // -------------------------------------------------------------
+  // YOUTUBE MUSIC SÖZ ÇIKARICI (DOM & MUSIXMATCH)
+  // -------------------------------------------------------------
+  function extractYtMusicLyrics() {
+    // 1. YouTube Music'in sağ sekmesindeki açıklama/söz rafını kontrol et
+    const shelf = document.querySelector('ytmusic-description-shelf-renderer');
+    if (shelf) {
+      const desc = shelf.querySelector('.description, #description, yt-formatted-string.description');
+      if (desc && desc.textContent.trim()) {
+        const footer = shelf.querySelector('.footer');
+        return {
+          plainLyrics: desc.textContent.trim(),
+          syncedLyrics: '',
+          source: footer ? footer.textContent.trim() : 'Musixmatch'
+        };
+      }
+    }
+
+    // 2. Lyrics sekmesi kapsayıcısı
+    const lyricsTab = document.querySelector('ytmusic-tab-renderer[page-type*="LYRICS"]');
+    if (lyricsTab) {
+      const desc = lyricsTab.querySelector('.description, yt-formatted-string');
+      if (desc && desc.textContent.trim()) {
+        return {
+          plainLyrics: desc.textContent.trim(),
+          syncedLyrics: '',
+          source: 'YouTube Music'
+        };
+      }
+    }
+
+    return null;
+  }
+
+  // YouTube Music'te sözler sekmesini bulup arka planda tetikle
+  function loadAndSendYtMusicLyrics() {
+    const lyricsData = extractYtMusicLyrics();
+    if (lyricsData) {
+      sendToCore({ type: 'LYRICS_UPDATE', data: lyricsData });
+      return;
+    }
+
+    // Eğer henüz söz sekmesine tıklanmadıysa, Sözler sekmesine tıkla
+    const tabs = document.querySelectorAll('ytmusic-player-page ytmusic-tab-header-renderer, ytmusic-player-page tp-yt-paper-tab');
+    for (const tab of tabs) {
+      const txt = (tab.textContent || '').toLowerCase();
+      if (txt.includes('sözler') || txt.includes('lyrics')) {
+        tab.click();
+        setTimeout(() => {
+          const loadedLyrics = extractYtMusicLyrics();
+          if (loadedLyrics) {
+            sendToCore({ type: 'LYRICS_UPDATE', data: loadedLyrics });
+          }
+        }, 800);
+        break;
+      }
+    }
+  }
+
+  // -------------------------------------------------------------
+  // ÇALMA LİSTESİ VE KUYRUK ÇEKİCİLERİ
+  // -------------------------------------------------------------
+  // 1. YouTube Music Kuyruğu
+  function extractYtMusicQueue() {
     const items = [];
     const queueElements = document.querySelectorAll('ytmusic-player-queue-item');
     queueElements.forEach((el, index) => {
@@ -127,11 +274,54 @@
     return items;
   }
 
-  // Durumu PC-Core'a Düzenli İlet (1 sn periyot)
+  // 2. Normal YouTube.com Çalma Listesi Kuyruğu
+  function extractYtVideoQueue() {
+    const items = [];
+    const panel = document.querySelector('ytd-playlist-panel-renderer');
+    if (!panel) return items;
+
+    const queueElements = panel.querySelectorAll('ytd-playlist-panel-video-renderer');
+    queueElements.forEach((el, index) => {
+      const titleEl = el.querySelector('#video-title');
+      const artistEl = el.querySelector('#byline, ytd-channel-name');
+      const durEl = el.querySelector('#time-status span, .ytd-thumbnail-overlay-time-status-renderer');
+      const isSelected = el.hasAttribute('selected') ||
+                         el.classList.contains('selected') ||
+                         el.getAttribute('is-selected') === 'true';
+
+      if (titleEl && titleEl.textContent.trim()) {
+        items.push({
+          index,
+          title: titleEl.textContent.trim(),
+          artist: artistEl ? artistEl.textContent.trim() : 'YouTube',
+          duration: durEl ? durEl.textContent.trim() : '',
+          isCurrent: isSelected,
+          isRecommendation: false
+        });
+      }
+    });
+    return items;
+  }
+
+  // -------------------------------------------------------------
+  // VERİ İLETİM KÖPRÜSÜ
+  // -------------------------------------------------------------
+  function sendToCore(payload) {
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+      chrome.runtime.sendMessage(payload, () => {
+        if (chrome.runtime.lastError) {}
+      });
+    }
+  }
+
+  // -------------------------------------------------------------
+  // PERİYODİK MEDYA DURUMU TAKİBİ (1 sn)
+  // -------------------------------------------------------------
   setInterval(() => {
     const host = window.location.hostname;
     let trackInfo = null;
 
+    // 1. YouTube Music Takibi
     if (host.includes('music.youtube.com')) {
       const video = document.querySelector('video');
       const titleEl = document.querySelector('ytmusic-player-bar .title');
@@ -145,22 +335,77 @@
           art = art.replace(/=w\d+-h\d+[^=]*/, '=w600-h600-l90-rj').replace(/=s\d+[^=]*/, '=s800');
         }
 
-        const queueList = extractYtQueue();
+        const currentVid = urlParams.get('v') || '';
+        const queueList = extractYtMusicQueue();
+        const lyricsData = extractYtMusicLyrics();
 
         trackInfo = {
           title: titleEl.textContent.trim(),
           artist: artistEl ? artistEl.textContent.trim() : 'YouTube Music',
-          videoId: urlParams.get('v') || '',
+          videoId: currentVid,
           isPlaying: !video.paused,
           currentTime: Math.floor(video.currentTime),
           duration: Math.floor(video.duration || 0),
           volume: Math.round(video.volume * 100),
           artwork: art,
           queue: queueList.length > 0 ? queueList : undefined,
+          lyrics: lyricsData || undefined,
           sourceApp: 'YouTube Music'
         };
+
+        // Otomatik Sıradaki Parça Atlaması (Bu şarkı bitince bundan devam et)
+        if (pendingNextTrackIndex !== null && video.duration > 0) {
+          // Şarkı bitimine 1 saniye kala veya video bittiğinde
+          if (video.ended || (video.currentTime >= video.duration - 1.2)) {
+            const nextIdx = pendingNextTrackIndex;
+            pendingNextTrackIndex = null;
+            jumpToYtMusicQueueIndex(nextIdx);
+          }
+        }
+
+        lastReportedVideoId = currentVid;
       }
-    } else if (host.includes('spotify.com')) {
+    }
+
+    // 2. Normal YouTube.com Takibi
+    else if (host.includes('youtube.com') && !host.includes('music.youtube.com')) {
+      const video = document.querySelector('video');
+      const titleEl = document.querySelector('h1.ytd-watch-metadata yt-formatted-string, #above-the-fold #title h1, h1.title');
+      const artistEl = document.querySelector('#owner #channel-name a, ytd-channel-name a, #upload-info #channel-name');
+
+      if (video && titleEl && titleEl.textContent.trim()) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentVid = urlParams.get('v') || '';
+        const queueList = extractYtVideoQueue();
+
+        trackInfo = {
+          title: titleEl.textContent.trim(),
+          artist: artistEl ? artistEl.textContent.trim() : 'YouTube',
+          videoId: currentVid,
+          isPlaying: !video.paused,
+          currentTime: Math.floor(video.currentTime),
+          duration: Math.floor(video.duration || 0),
+          volume: Math.round(video.volume * 100),
+          artwork: currentVid ? `https://i.ytimg.com/vi/${currentVid}/hqdefault.jpg` : '',
+          queue: queueList.length > 0 ? queueList : undefined,
+          sourceApp: 'YouTube'
+        };
+
+        // Çalma listesinde otomatik sıradaki parçaya geçiş kontrolü
+        if (pendingNextTrackIndex !== null && video.duration > 0) {
+          if (video.ended || (video.currentTime >= video.duration - 1.2)) {
+            const nextIdx = pendingNextTrackIndex;
+            pendingNextTrackIndex = null;
+            jumpToYtVideoQueueIndex(nextIdx);
+          }
+        }
+
+        lastReportedVideoId = currentVid;
+      }
+    }
+
+    // 3. Spotify Web Takibi
+    else if (host.includes('spotify.com')) {
       const titleEl = document.querySelector('[data-testid="context-item-info-title"]');
       const artistEl = document.querySelector('[data-testid="context-item-info-subtitles"]');
       const artEl = document.querySelector('[data-testid="cover-art-image"]');
@@ -179,23 +424,7 @@
     }
 
     if (trackInfo) {
-      // 1. WebSocket üzerinden direkt iletim (En hızlı ve güvenli yöntem)
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        try {
-          ws.send(JSON.stringify({ action: 'browser-update', data: trackInfo }));
-          return;
-        } catch (_) {}
-      }
-
-      // 2. Arka plan servis çalışanı (Background Service Worker) üzerinden proxy iletim
-      // (Manifest V3'te arka plan servisi sayfanın CSP ve Mixed-Content kısıtlamalarına tabi değildir)
-      try {
-        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-          chrome.runtime.sendMessage({ type: 'BROWSER_UPDATE', data: trackInfo }, () => {
-            if (chrome.runtime.lastError) {}
-          });
-        }
-      } catch (_) {}
+      sendToCore({ type: 'BROWSER_UPDATE', data: trackInfo });
     }
   }, 1000);
 })();
