@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const dgram = require('dgram');
-const { spawn, execSync } = require('child_process');
+const { spawn, execSync, exec } = require('child_process');
 const { WebSocketServer, WebSocket } = require('ws');
 
 // Ayarları yükle
@@ -1105,23 +1105,25 @@ function ensureTrayRunning() {
   const trayScriptPath = path.join(__dirname, 'MusicBridge-Tray.ps1');
   if (!fs.existsSync(trayScriptPath)) return;
 
-  try {
-    const checkCmd = 'powershell.exe -NoProfile -Command "(Get-CimInstance Win32_Process -Filter \\"CommandLine LIKE \'%MusicBridge-Tray.ps1%\'\\").ProcessId"';
-    const output = execSync(checkCmd, { windowsHide: true, encoding: 'utf8' }).trim();
-    if (!output) {
+  const checkCmd = 'powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Select-Object -ExpandProperty CommandLine | Select-String \'MusicBridge-Tray.ps1\'"';
+  exec(checkCmd, { windowsHide: true, encoding: 'utf8' }, (err, stdout) => {
+    const hasTray = stdout && stdout.split('\n').some(line => line.includes('MusicBridge-Tray.ps1') && !line.includes('Select-String'));
+    if (!hasTray) {
       console.log('📌 Sistem Tepsisi (Tray) simgesi arka planda başlatılıyor...');
-      spawn('powershell.exe', [
-        '-NoProfile',
-        '-ExecutionPolicy', 'Bypass',
-        '-WindowStyle', 'Hidden',
-        '-File', trayScriptPath
-      ], {
-        detached: true,
-        stdio: 'ignore',
-        windowsHide: true
-      }).unref();
+      try {
+        spawn('powershell.exe', [
+          '-NoProfile',
+          '-ExecutionPolicy', 'Bypass',
+          '-WindowStyle', 'Hidden',
+          '-File', trayScriptPath
+        ], {
+          detached: true,
+          stdio: 'ignore',
+          windowsHide: true
+        }).unref();
+      } catch (_) {}
     }
-  } catch (_) {}
+  });
 }
 
 // Sunucuyu başlat (Port doluysa otomatik bir sonrakine geçerek çökme yaşatmaz)
