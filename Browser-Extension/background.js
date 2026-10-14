@@ -2,11 +2,26 @@
 // Eren Teknoloji - 2026
 
 let ws = null;
-let currentPort = 8765;
+const CORE_PORT = 8765;
 let reconnectTimer = null;
 let isConnected = false;
+let isCheckingHealth = false;
 
-function connectCoreWs() {
+// Sunucunun çalışıp çalışmadığını sessizce kontrol eder (Chrome Hatalar ekranında ERR_CONNECTION_REFUSED çıkmasını engeller)
+async function checkCoreAlive() {
+  try {
+    const res = await fetch(`http://127.0.0.1:${CORE_PORT}/api/status`, {
+      method: 'GET',
+      cache: 'no-store',
+      signal: AbortSignal.timeout(1200)
+    });
+    return res.ok;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function connectCoreWs() {
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
@@ -16,12 +31,26 @@ function connectCoreWs() {
     return;
   }
 
+  if (isCheckingHealth) return;
+  isCheckingHealth = true;
+
+  // 1. Önce sunucunun ayakta olup olmadığını sessizce test et
+  const isAlive = await checkCoreAlive();
+  isCheckingHealth = false;
+
+  if (!isAlive) {
+    // Sunucu henüz başlatılmamış; 3 saniye sonra sessizce tekrar yokla
+    reconnectTimer = setTimeout(connectCoreWs, 3000);
+    return;
+  }
+
+  // 2. Sunucu aktifse WebSocket bağlantısını aç
   try {
-    ws = new WebSocket(`ws://127.0.0.1:${currentPort}`);
+    ws = new WebSocket(`ws://127.0.0.1:${CORE_PORT}`);
 
     ws.onopen = () => {
       isConnected = true;
-      console.log(`🎵 MusicBridge PC Core WebSocket Bağlantısı Başarılı (Port: ${currentPort})`);
+      console.log(`🎵 MusicBridge PC Core WebSocket Bağlantısı Başarılı (Port: ${CORE_PORT})`);
     };
 
     ws.onmessage = (event) => {
@@ -37,13 +66,10 @@ function connectCoreWs() {
     ws.onclose = () => {
       isConnected = false;
       ws = null;
-      // 3 saniye sonra yeniden bağlanmayı dene
       reconnectTimer = setTimeout(connectCoreWs, 3000);
     };
 
     ws.onerror = () => {
-      // Eğer varsayılan portta hata aldıysa bir sonraki portu dene (8765 -> 8766 -> 8765)
-      currentPort = currentPort === 8765 ? 8766 : 8765;
       if (ws) {
         try { ws.close(); } catch (_) {}
         ws = null;
@@ -92,25 +118,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     // 2. WebSocket kapalıysa HTTP POST ile ilet
     const endpoint = message.type === 'LYRICS_UPDATE' ? '/api/lyrics/update' : '/api/browser-update';
-    fetch(`http://127.0.0.1:${currentPort}${endpoint}`, {
+    fetch(`http://127.0.0.1:${CORE_PORT}${endpoint}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(message.data)
     })
       .then(res => res.json())
       .then(data => sendResponse({ success: true, via: 'http', data }))
-      .catch(err => {
-        // Yedek portu da dene
-        const altPort = currentPort === 8765 ? 8766 : 8765;
-        fetch(`http://127.0.0.1:${altPort}${endpoint}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(message.data)
-        })
-          .then(res => res.json())
-          .then(data => sendResponse({ success: true, via: 'http-alt', data }))
-          .catch(e => sendResponse({ success: false, error: e.message }));
-      });
+      .catch(e => sendResponse({ success: false, error: e.message }));
 
     return true; // Asenkron yanıt
   }
