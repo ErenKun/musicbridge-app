@@ -260,6 +260,7 @@ class MediaBridgeService : Service() {
                 PowerManager.PARTIAL_WAKE_LOCK,
                 "MusicBridge:MediaCommandWakeLock"
             )
+            try {
                 val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 val token = prefs.getString("auth_token", "") ?: ""
 
