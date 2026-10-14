@@ -46,6 +46,13 @@ let currentState = {
 
 // Güvenlik PIN Kodu ve Yetkilendirme (Sıfır-Güven Ağ Modeli)
 let serverPin = (config.server && config.server.pin) ? String(config.server.pin) : String(Math.floor(1000 + Math.random() * 9000));
+if (!config.server) config.server = {};
+if (!config.server.pin) {
+  config.server.pin = serverPin;
+  try {
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+  } catch (_) {}
+}
 const tokensFilePath = path.join(__dirname, 'authorized_tokens.json');
 const authorizedTokens = new Set();
 
@@ -557,7 +564,7 @@ process.on('exit', () => {
 const server = http.createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Auth-Token');
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
@@ -608,6 +615,69 @@ const server = http.createServer((req, res) => {
       } catch (e) {
         res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+
+  // PIN Bilgisi Alma (Yalnızca Yetkili Cihazlar veya Localhost)
+  if (url.pathname === '/api/auth/pin' && req.method === 'GET') {
+    if (!isClientAuthorized(req)) {
+      res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, error: 'Yetkisiz erişim! PIN kodunu görmek için yetkilendirilmiş olmalısınız.' }));
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ success: true, pin: serverPin }));
+    return;
+  }
+
+  // PIN Güncelleme / Özel PIN Belirleme / Sıfırlama (Yalnızca Yetkili Cihazlar veya Localhost)
+  if (url.pathname === '/api/auth/pin' && req.method === 'POST') {
+    let bodyStr = '';
+    req.on('data', chunk => { bodyStr += chunk; });
+    req.on('end', () => {
+      try {
+        const body = bodyStr ? JSON.parse(bodyStr) : {};
+        if (!isClientAuthorized(req, body)) {
+          res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ success: false, error: 'Yetkisiz erişim! PIN değiştirmek için oturum açmış veya PC başında olmalısınız.' }));
+          return;
+        }
+
+        let newPin = '';
+        const rawPin = (body.pin !== undefined && body.pin !== null) ? String(body.pin).trim() : '';
+        if (/^\d{4}$/.test(rawPin)) {
+          newPin = rawPin;
+        } else if (!rawPin || rawPin === 'random' || rawPin === 'reset') {
+          newPin = String(Math.floor(1000 + Math.random() * 9000));
+        } else {
+          res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ success: false, error: 'Geçersiz PIN formatı! PIN 4 haneli rakamlardan oluşmalıdır (örn: 1234).' }));
+          return;
+        }
+
+        serverPin = newPin;
+        try {
+          if (!config.server) config.server = {};
+          config.server.pin = serverPin;
+          fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+        } catch (cfgErr) {
+          console.error('config.json kaydedilemedi:', cfgErr.message);
+        }
+
+        // Bağlı tüm istemcilere yeni PIN'i anında bildir
+        broadcast({ type: 'pin-updated', pin: serverPin });
+
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({
+          success: true,
+          pin: serverPin,
+          message: `PIN kodu başarıyla ${serverPin} olarak güncellendi ve kalıcı kaydedildi.`
+        }));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ success: false, error: err.message }));
       }
     });
     return;
@@ -1036,7 +1106,7 @@ function ensureTrayRunning() {
   if (!fs.existsSync(trayScriptPath)) return;
 
   try {
-    const checkCmd = 'powershell.exe -NoProfile -Command "(Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like \'*MusicBridge-Tray.ps1*\' }).ProcessId"';
+    const checkCmd = 'powershell.exe -NoProfile -Command "(Get-CimInstance Win32_Process -Filter \\"CommandLine LIKE \'%MusicBridge-Tray.ps1%\'\\").ProcessId"';
     const output = execSync(checkCmd, { windowsHide: true, encoding: 'utf8' }).trim();
     if (!output) {
       console.log('📌 Sistem Tepsisi (Tray) simgesi arka planda başlatılıyor...');

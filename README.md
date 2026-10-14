@@ -95,11 +95,14 @@ sequenceDiagram
 ### Güvenlik Prensiplerimiz:
 1. **PIN Bilgisayardan Nasıl Öğrenilir?**
    - Windows görev çubuğunun sağ altındaki **MusicBridge tepsisi simgesine** sağ tıklayarak en üstteki **"🔑 Güvenlik PIN: XXXX"** alanından tek tıkla görebilir ve kopyalayabilirsiniz.
-   - Bilgisayarın kendi tarayıcısından (`localhost:8765`) girildiğinde sistem sizi doğrudan tanır ve PIN sormaz; "Bağlantı" sekmesinde PIN her zaman okunabilir.
-   - Dilerseniz `config.json` dosyasından sabit bir PIN kodu tanımlayabilirsiniz.
-2. **Akıllı Cihaz Hafızası ("Bu Cihazı Hatırla"):**
+   - Bilgisayarın kendi tarayıcısından (`localhost:8765`) girildiğinde sistem sizi doğrudan tanır ve PIN sormaz; "Bağlantı" sekmesinde PIN her zaman okunabilir ve kopyalanabilir.
+2. **Özel Sabit PIN Belirleme & Sıfırlama (İki Yönlü Kolaylık):**
+   - Hem **Sistem Tepsisi Menüsünden** (`✏️ Özel Sabit PIN Belirle...`) hem de **Telefon/Web Bağlantı Menüsünden** dilediğiniz 4 haneli kalıcı PIN kodunu (örn: `1234`) belirleyebilirsiniz.
+   - PIN'i unutma veya yenilemek isteme durumunda tek tıkla **"🎲 Rastgele Yeni PIN Üret (Sıfırla)"** seçeneğiyle anında yeni bir PIN atanır.
+   - Belirlenen PIN kodu `config.json` dosyasına kalıcı kaydedilir; bilgisayar yeniden başlasa dahi korunur.
+3. **Akıllı Cihaz Hafızası ("Bu Cihazı Hatırla"):**
    - Kendi telefonunuzdan veya tabletinizden PIN kodunu bir kez girdikten sonra cihazınız güvenli şifrelenmiş jeton (token) ile kaydedilir. Bir daha asla PIN sormaz.
-3. **Bulutsuz & Sıfır İzleme:**
+4. **Bulutsuz & Sıfır İzleme:**
    - Şarkı geçmişiniz, dinleme alışkanlıklarınız veya donanım verileriniz hiçbir harici sunucuya veya buluta gönderilmez.
    - Tüm iletişim yerel Wi-Fi ağınızda veya uçtan uca şifreli Tailscale WireGuard tünelinizde gerçekleşir.
 

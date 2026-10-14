@@ -3,6 +3,7 @@
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName Microsoft.VisualBasic
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $scriptDir
@@ -72,6 +73,53 @@ $pinItem.add_Click({
     $notifyIcon.ShowBalloonTip(2000, "MusicBridge PIN", "Guvenlik PIN kodu panoya kopyalandi: $($global:serverPin)", [System.Windows.Forms.ToolTipIcon]::Info)
 })
 $contextMenu.Items.Add($pinItem) | Out-Null
+
+# PIN Degistir / Sabit PIN Belirle
+$changePinItem = New-Object System.Windows.Forms.ToolStripMenuItem
+$changePinItem.Text = "✏️ Ozel Sabit PIN Belirle..."
+$changePinItem.add_Click({
+    RefreshServerInfo
+    $promptMsg = "MusicBridge baglantilari icin yeni 4 haneli PIN kodunu girin (ornegin: 1234):`n`nBu kod kalici olarak kaydedilir ve unutursaniz buradan degistirebilirsiniz."
+    $inputVal = [Microsoft.VisualBasic.Interaction]::InputBox($promptMsg, "MusicBridge - Sabit PIN Belirle", $global:serverPin)
+    if ($inputVal -and $inputVal.Trim() -ne "") {
+        $cleanPin = $inputVal.Trim()
+        if ($cleanPin -match '^\d{4}$') {
+            try {
+                $body = @{ pin = $cleanPin } | ConvertTo-Json
+                $res = Invoke-RestMethod -Uri "http://127.0.0.1:$($global:activePort)/api/auth/pin" -Method Post -Body $body -ContentType "application/json; charset=utf-8" -TimeoutSec 3
+                if ($res.success) {
+                    $global:serverPin = $res.pin
+                    $pinItem.Text = "🔑 Guvenlik PIN: $($global:serverPin) (Kopyala)"
+                    $notifyIcon.ShowBalloonTip(2500, "MusicBridge PIN Guncellendi", "Yeni Guvenlik PIN: $($res.pin)", [System.Windows.Forms.ToolTipIcon]::Info)
+                }
+            } catch {
+                [System.Windows.Forms.MessageBox]::Show("PIN guncellenirken hata olustu: $($_.Exception.Message)", "MusicBridge Hata", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+            }
+        } else {
+            [System.Windows.Forms.MessageBox]::Show("Gecersiz PIN formati! PIN kodu tam 4 haneli rakamlardan olusmalidir (ornek: 1234).", "MusicBridge Uyari", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+        }
+    }
+})
+$contextMenu.Items.Add($changePinItem) | Out-Null
+
+# PIN Rastgele Uret / Sifirla
+$resetPinItem = New-Object System.Windows.Forms.ToolStripMenuItem
+$resetPinItem.Text = "🎲 Rastgele Yeni PIN Uret (Sifirla)"
+$resetPinItem.add_Click({
+    RefreshServerInfo
+    try {
+        $body = @{ pin = "random" } | ConvertTo-Json
+        $res = Invoke-RestMethod -Uri "http://127.0.0.1:$($global:activePort)/api/auth/pin" -Method Post -Body $body -ContentType "application/json; charset=utf-8" -TimeoutSec 3
+        if ($res.success) {
+            $global:serverPin = $res.pin
+            $pinItem.Text = "🔑 Guvenlik PIN: $($global:serverPin) (Kopyala)"
+            $notifyIcon.ShowBalloonTip(2500, "MusicBridge PIN Sifirlandi", "Yeni Rastgele PIN: $($res.pin)", [System.Windows.Forms.ToolTipIcon]::Info)
+        }
+    } catch {
+        [System.Windows.Forms.MessageBox]::Show("PIN sifirlanirken hata olustu: $($_.Exception.Message)", "MusicBridge Hata", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+    }
+})
+$contextMenu.Items.Add($resetPinItem) | Out-Null
 
 $contextMenu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator)) | Out-Null
 

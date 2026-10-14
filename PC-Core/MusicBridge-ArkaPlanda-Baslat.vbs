@@ -11,7 +11,7 @@ If Not FSO.FolderExists(ScriptDir & "\node_modules") Then
 End If
 
 ' 1. Node.js sunucusunu sifir pencere ile arka planda baslat
-WshShell.Run "node server.js", 0, False
+WshShell.Run "cmd /c node server.js", 0, False
 
 ' 2. Sistem Tepsisi (Tray) simgesini kesinlikle arka planda baslat
 WshShell.Run "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File """ & ScriptDir & "\MusicBridge-Tray.ps1""", 0, False

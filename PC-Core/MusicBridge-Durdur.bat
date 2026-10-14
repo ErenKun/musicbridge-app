@@ -8,8 +8,8 @@ echo ==============================================================
 echo.
 echo Calisan MusicBridge surecleri kapaniyor...
 
-powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*server.js*' -or $_.CommandLine -like '*windows-media-bridge.ps1*' -or $_.CommandLine -like '*MusicBridge-Tray.ps1*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
+powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"CommandLine LIKE '%%server.js%%' OR CommandLine LIKE '%%windows-media-bridge.ps1%%' OR CommandLine LIKE '%%MusicBridge-Tray.ps1%%'\" | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
 
 echo.
 echo [TAMAMLANDI] MusicBridge ve tum bagli surecler durduruldu.
-timeout /t 2 >nul
+ping -n 2 127.0.0.1 >nul

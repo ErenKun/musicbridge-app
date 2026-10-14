@@ -175,6 +175,8 @@ async function fetchCurrentState(isRetry = false) {
       if (json.pin) {
         const pinEl = document.getElementById('net-pin');
         if (pinEl) pinEl.innerText = json.pin;
+        const pinDisplayEl = document.getElementById('net-pin-display');
+        if (pinDisplayEl) pinDisplayEl.innerText = json.pin;
       }
 
       if (json.media) {
@@ -283,6 +285,14 @@ function connectWebSocket(forceNew = false) {
       }
       if (msg.type === 'lyrics-change' && msg.data) {
         renderLyrics(msg.data);
+        return;
+      }
+      if (msg.type === 'pin-updated' && msg.pin) {
+        const pinEl = document.getElementById('net-pin');
+        if (pinEl) pinEl.innerText = msg.pin;
+        const pinDisplayEl = document.getElementById('net-pin-display');
+        if (pinDisplayEl) pinDisplayEl.innerText = msg.pin;
+        showToast(`🔑 Güvenlik PIN Güncellendi: ${msg.pin}`);
         return;
       }
       if (msg.type === 'sync' || msg.type === 'track-change') {
@@ -943,6 +953,10 @@ async function fetchNetworkStatus() {
       if (pinEl && data.pin) {
         pinEl.innerText = data.pin;
       }
+      const pinDisplayEl = document.getElementById('net-pin-display');
+      if (pinDisplayEl && data.pin) {
+        pinDisplayEl.innerText = data.pin;
+      }
 
       renderQuickIps(data.network.lan, data.network.tailscale);
     }
@@ -1063,6 +1077,120 @@ async function applyCustomServerIp() {
   } catch (err) {
     feedback.className = 'feedback-text error';
     feedback.innerText = '❌ Sunucuya ulaşılamadı. IP adresinin doğru ve PC\'nin açık olduğundan emin olun.';
+  }
+}
+
+// PIN Kopyala
+function copyCurrentPin() {
+  const pinEl = document.getElementById('net-pin-display') || document.getElementById('net-pin');
+  const pin = pinEl ? pinEl.innerText.trim() : '';
+  if (pin && pin !== '----') {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(pin).then(() => {
+        showToast(`📋 PIN panoya kopyalandı: ${pin}`);
+      }).catch(() => {
+        showToast(`PIN: ${pin}`);
+      });
+    } else {
+      showToast(`PIN: ${pin}`);
+    }
+  }
+}
+
+// Özel Sabit PIN Belirle & Kaydet
+async function updateCustomPin() {
+  const input = document.getElementById('custom-pin-input');
+  const feedback = document.getElementById('pin-change-feedback');
+  if (!input) return;
+
+  const pin = input.value.trim();
+  if (!/^\d{4}$/.test(pin)) {
+    if (feedback) {
+      feedback.className = 'feedback-text error';
+      feedback.innerText = 'Lütfen tam 4 haneli rakamlardan oluşan bir PIN girin (örn: 1234).';
+    }
+    return;
+  }
+
+  if (feedback) {
+    feedback.className = 'feedback-text';
+    feedback.innerText = 'PIN güncelleniyor ve kaydediliyor...';
+  }
+
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+
+    const res = await fetch('/api/auth/pin', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ pin, token: authToken })
+    });
+    const data = await res.json();
+    if (data.success && data.pin) {
+      input.value = '';
+      if (feedback) {
+        feedback.className = 'feedback-text success';
+        feedback.innerText = `✅ PIN başarıyla "${data.pin}" olarak kaydedildi ve sabitlendi!`;
+      }
+      const pinEl = document.getElementById('net-pin');
+      if (pinEl) pinEl.innerText = data.pin;
+      const pinDisplayEl = document.getElementById('net-pin-display');
+      if (pinDisplayEl) pinDisplayEl.innerText = data.pin;
+      showToast(`🔑 Yeni PIN: ${data.pin}`);
+    } else {
+      if (feedback) {
+        feedback.className = 'feedback-text error';
+        feedback.innerText = data.error || 'PIN güncellenemedi.';
+      }
+    }
+  } catch (err) {
+    if (feedback) {
+      feedback.className = 'feedback-text error';
+      feedback.innerText = 'Bağlantı hatası: ' + err.message;
+    }
+  }
+}
+
+// Rastgele Yeni PIN Üret (Sıfırla)
+async function generateRandomPin() {
+  const feedback = document.getElementById('pin-change-feedback');
+  if (feedback) {
+    feedback.className = 'feedback-text';
+    feedback.innerText = 'Yeni rastgele PIN üretiliyor...';
+  }
+
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+
+    const res = await fetch('/api/auth/pin', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ pin: 'random', token: authToken })
+    });
+    const data = await res.json();
+    if (data.success && data.pin) {
+      if (feedback) {
+        feedback.className = 'feedback-text success';
+        feedback.innerText = `✅ Yeni rastgele PIN üretildi: "${data.pin}"`;
+      }
+      const pinEl = document.getElementById('net-pin');
+      if (pinEl) pinEl.innerText = data.pin;
+      const pinDisplayEl = document.getElementById('net-pin-display');
+      if (pinDisplayEl) pinDisplayEl.innerText = data.pin;
+      showToast(`🎲 Yeni PIN: ${data.pin}`);
+    } else {
+      if (feedback) {
+        feedback.className = 'feedback-text error';
+        feedback.innerText = data.error || 'PIN sıfırlanamadı.';
+      }
+    }
+  } catch (err) {
+    if (feedback) {
+      feedback.className = 'feedback-text error';
+      feedback.innerText = 'Bağlantı hatası: ' + err.message;
+    }
   }
 }
 

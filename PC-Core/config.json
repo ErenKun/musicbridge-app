@@ -8,7 +8,8 @@
   "server": {
     "http_port": 8765,
     "websocket_port": 8765,
-    "host": "0.0.0.0"
+    "host": "0.0.0.0",
+    "pin": "9705"
   },
   "youtube_music": {
     "th_ch_api_url": "http://127.0.0.1:13091",

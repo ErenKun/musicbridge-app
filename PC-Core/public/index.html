@@ -229,6 +229,34 @@
         </div>
       </div>
 
+      <!-- Güvenlik PIN Yönetimi (Sabitle / Değiştir / Sıfırla) -->
+      <div class="net-card">
+        <div class="card-title-row">
+          <h3>Güvenlik PIN Yönetimi</h3>
+          <span class="badge" style="background: rgba(99,102,241,0.2); color: #818cf8; font-size: 0.75rem; padding: 2px 8px; border-radius: 6px; font-weight: 600;">Zero-Trust</span>
+        </div>
+        <p class="help-text" style="margin-bottom: 12px;">Yeni bağlanan telefon veya cihazların girmesi gereken 4 haneli PIN kodunu buradan istediğiniz sabit bir koda (örn: 1234) değiştirebilir veya unutma durumunda tek tıkla sıfırlayabilirsiniz:</p>
+        
+        <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 10px 14px; margin-bottom: 12px;">
+          <div>
+            <div style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px;">Aktif Eşleşme PIN</div>
+            <div id="net-pin-display" style="font-size: 1.6rem; font-weight: 800; font-family: monospace; letter-spacing: 4px; color: #818cf8; line-height: 1.2;">----</div>
+          </div>
+          <button class="btn-secondary" onclick="copyCurrentPin()" style="font-size: 0.8rem; padding: 7px 12px; border-radius: 8px; display: flex; align-items: center; gap: 5px;">
+            <span>📋</span> Kopyala
+          </button>
+        </div>
+
+        <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+          <input type="text" id="custom-pin-input" placeholder="Yeni Sabit PIN (örn: 1234)" maxlength="4" pattern="\d*" inputmode="numeric" style="flex: 1; text-align: center; font-family: monospace; letter-spacing: 3px; font-weight: 700; font-size: 1rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); color: #fff; border-radius: 8px; padding: 8px;" onkeyup="if(event.key==='Enter') updateCustomPin()">
+          <button class="btn-primary" onclick="updateCustomPin()" style="white-space: nowrap; padding: 8px 16px; border-radius: 8px; font-weight: 600;">PIN Kaydet</button>
+        </div>
+        <button class="btn-secondary" onclick="generateRandomPin()" style="width: 100%; font-size: 0.82rem; padding: 8px; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 6px; background: rgba(255,255,255,0.04);">
+          <span>🎲</span> Rastgele Yeni PIN Üret (Sıfırla)
+        </button>
+        <div id="pin-change-feedback" class="feedback-text" style="margin-top: 8px; font-size: 0.82rem; font-weight: 500;"></div>
+      </div>
+
       <!-- Hızlı Bağlantı Değiştirme Butonları -->
       <div class="net-card">
         <h3>Hızlı Bağlantı Seçimi</h3>
