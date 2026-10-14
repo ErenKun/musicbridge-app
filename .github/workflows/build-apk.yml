@@ -3,6 +3,7 @@ name: Build MusicBridge APK
 on:
   push:
     branches: [ main, master ]
+    tags: [ 'v*' ]
   workflow_dispatch:
 
 permissions:
@@ -38,29 +39,31 @@ jobs:
     - name: APK Dosyasini Yayina Hazirla
       run: |
         mkdir -p release-output
-        cp Android-MicroShell/app/build/outputs/apk/debug/app-debug.apk release-output/MusicBridge-v2.0.0.apk
+        cp Android-MicroShell/app/build/outputs/apk/debug/app-debug.apk release-output/MusicBridge-v2.1.0.apk
 
     - name: APK Dosyasini Artifact Olarak Yukle
       uses: actions/upload-artifact@v4
       with:
-        name: MusicBridge-v2.0.0-APK
-        path: release-output/MusicBridge-v2.0.0.apk
+        name: MusicBridge-v2.1.0-APK
+        path: release-output/MusicBridge-v2.1.0.apk
         retention-days: 30
 
     - name: 🚀 GitHub Release Olarak Yayinla
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: v2.0.0
-        name: "🎵 MusicBridge v2.0.0 (LTS)"
+        tag_name: v2.1.0
+        name: "🎵 MusicBridge v2.1.0 (LTS)"
         body: |
-          ## ✨ MusicBridge v2.0.0 Yenilikleri & Güncelleme Notları
-          * 🔍 **Sıfır-Konfigürasyon Otomatik Ağ Keşfi (UDP Discovery):** IP yazma zorunluluğu kalktı; telefon ağdaki PC'yi otomatik keşfeder.
-          * 📞 **Akıllı Çağrı Duraklatma (Smart Auto-Pause):** Telefona arama geldiğinde PC'deki müziği otomatik duraklatır, görüşme bitince devam ettirir.
-          * 🎤 **Canlı Senkronize Şarkı Sözleri (Lyrics Engine):** LRCLIB API entegrasyonu ile karaoke tarzı anlık kayan şarkı sözleri.
-          * 📱 **Genişletilmiş Oynatıcı Desteği:** ReVanced, ViMusic, RiMusic, InnerTune, YouTube Music desteği.
-          * ⚡ **Performans ve Pil Tasarrufu:** %80 CPU ve I/O yükü azaltıldı, akıllı arka plan bekleme motoru.
-          * 🛡️ **Android 14 & 15 Uyumu:** `targetSdk 34` ve modern bildirim kontrolleri (Android 8.0 - 9.0 tam uyumu korundu).
-        files: release-output/MusicBridge-v2.0.0.apk
+          ## ✨ MusicBridge v2.1.0 Yenilikleri & Güncelleme Notları
+          * 🔐 **Zero-Trust PIN Doğrulaması:** 6 haneli dinamik veya kullanıcının belirlediği kalıcı sabit PIN (Salted SHA-256 HMAC & Bearer Token koruması).
+          * 🔄 **Çift Yönlü PIN Yönetimi & Sıfırlama:** Hem PC Sistem Tepsisi (Tray) menüsünden hem de mobil arayüzden PIN değiştirme, sabitleme ve sıfırlama.
+          * 🔊 **Android Hızlı Ayarlar Kutucuğu (Quick Settings Tile):** Telefon bildirim çekmecesinden tek tıkla donanım ses senkronizasyonunu açıp kapatabilme (`MusicBridgeTileService`).
+          * 🎛️ **Gelişmiş Ses Senkronizasyon Kontrolleri:** Sürekli bildirimdeki tek tık eylem butonu (`[ 🔊 Ses Senkronu: Açık/Kapalı ]`) ve mobil arayüz menüsündeki özel anahtar.
+          * 🖥️ **Windows Sistem Tepsisi (Tray) Kararlılığı:** Otomatik başlangıçta tepsi simgesinin gecikmesiz yüklenmesi, PIN gösterimi, IP ve QR menüleri.
+          * 📑 **YouTube Oynatma Listesi & Sıradaki Şarkılar Denetleyicisi:** Chrome eklentisi üzerinden YouTube listesindeki sonraki parçaları mobil ekranda görüp doğrudan atlayabilme.
+          * 🎵 **YouTube Music / Musixmatch Entegre Söz Motoru:** LRCLIB yanında web player DOM'undan senkronize şarkı sözü aktarımı.
+          * ⚡ **Kararlılık ve Güvenilirlik:** Xiaomi MIUI/HyperOS ve Samsung OneUI pil optimizasyonlarına karşı güçlendirilmiş `MediaSessionCompat` mimarisi.
+        files: release-output/MusicBridge-v2.1.0.apk
         draft: false
         prerelease: false
       env:
