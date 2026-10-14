@@ -477,25 +477,44 @@
   }
 
   // -------------------------------------------------------------
+  // -------------------------------------------------------------
+  // EKLENTİ GEÇERLİLİK KONTROLÜ
+  // -------------------------------------------------------------
+  function isExtensionValid() {
+    try {
+      return typeof chrome !== 'undefined' && !!chrome.runtime && !!chrome.runtime.id;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // -------------------------------------------------------------
   // VERİ İLETİM KÖPRÜSÜ
   // -------------------------------------------------------------
   function sendToCore(payload) {
-    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+    if (!isExtensionValid()) return;
+    try {
       chrome.runtime.sendMessage(payload, (res) => {
-        if (chrome.runtime.lastError) {}
+        if (!isExtensionValid()) return;
+        if (chrome.runtime.lastError) return;
         if (res && res.data && Array.isArray(res.data.commands) && res.data.commands.length > 0) {
           for (const cmd of res.data.commands) {
             executeCommand(cmd.action, cmd.data);
           }
         }
       });
-    }
+    } catch (_) {}
   }
 
   // -------------------------------------------------------------
   // PERİYODİK MEDYA DURUMU TAKİBİ (1 sn)
   // -------------------------------------------------------------
-  setInterval(() => {
+  const trackerTimer = setInterval(() => {
+    if (!isExtensionValid()) {
+      clearInterval(trackerTimer);
+      return;
+    }
+
     attachVideoListeners();
     const host = window.location.hostname;
     let trackInfo = null;
@@ -533,12 +552,11 @@
         };
 
         // Otomatik Sıradaki Parça Atlaması (Bu şarkı bitince bundan devam et)
-        if (pendingNextTrackIndex !== null && video.duration > 0) {
-          // Şarkı bitimine 1 saniye kala veya video bittiğinde
-          if (video.ended || (video.currentTime >= video.duration - 1.2)) {
-            const nextIdx = pendingNextTrackIndex;
-            pendingNextTrackIndex = null;
-            jumpToYtMusicQueueIndex(nextIdx);
+        if (pendingNextTrackData !== null && video.duration > 0) {
+          if (video.ended || (video.currentTime >= video.duration - 1.0)) {
+            const nextData = pendingNextTrackData;
+            pendingNextTrackData = null;
+            jumpToYtMusicQueueIndex(nextData);
           }
         }
 
@@ -571,11 +589,11 @@
         };
 
         // Çalma listesinde otomatik sıradaki parçaya geçiş kontrolü
-        if (pendingNextTrackIndex !== null && video.duration > 0) {
-          if (video.ended || (video.currentTime >= video.duration - 1.2)) {
-            const nextIdx = pendingNextTrackIndex;
-            pendingNextTrackIndex = null;
-            jumpToYtVideoQueueIndex(nextIdx);
+        if (pendingNextTrackData !== null && video.duration > 0) {
+          if (video.ended || (video.currentTime >= video.duration - 1.0)) {
+            const nextData = pendingNextTrackData;
+            pendingNextTrackData = null;
+            jumpToYtVideoQueueIndex(nextData);
           }
         }
 
