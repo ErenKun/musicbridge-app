@@ -37,8 +37,8 @@
 
         <service
             android:name=".MusicBridgeTileService"
-            android:icon="@android:drawable/ic_media_play"
-            android:label="MusicBridge"
+            android:icon="@android:drawable/ic_lock_silent_mode_off"
+            android:label="PC Ses Senkronu"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
             android:exported="true">
             <intent-filter>

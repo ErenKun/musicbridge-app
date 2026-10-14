@@ -3,7 +3,9 @@ package com.eren.musicbridge
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -46,6 +48,7 @@ class MediaBridgeService : Service() {
         const val NOTIFICATION_ID = 8765
         const val PREFS_NAME = "MusicBridgePrefs"
         const val KEY_SERVER_URL = "server_url"
+        const val ACTION_TOGGLE_VOLUME_SYNC = "com.eren.musicbridge.ACTION_TOGGLE_VOLUME_SYNC"
         var instance: MediaBridgeService? = null
 
         // Tum akilli saatlerin destekledigi tam eylem listesi
@@ -85,6 +88,17 @@ class MediaBridgeService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_TOGGLE_VOLUME_SYNC) {
+            val nextState = !isVolumeSyncEnabled
+            setVolumeSyncEnabled(nextState)
+            val msg = if (nextState) {
+                "🔊 Ses Senkronu Açıldı: Telefonun ses tuşları PC sesini değiştirecek"
+            } else {
+                "🔇 Ses Senkronu Kapatıldı: Telefonun ses tuşları PC sesini etkilemeyecek"
+            }
+            android.widget.Toast.makeText(this, msg, android.widget.Toast.LENGTH_SHORT).show()
+            return START_STICKY
+        }
         intent?.getStringExtra("SERVER_URL")?.let {
             setServerUrl(it)
         }
@@ -285,10 +299,37 @@ class MediaBridgeService : Service() {
 
     fun setVolumeSyncEnabled(enabled: Boolean) {
         isVolumeSyncEnabled = enabled
+        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean("volume_sync_enabled", enabled)
+            .apply()
+
         if (enabled) {
             registerVolumeReceiver()
+            syncHardwareVolumeToPc()
         } else {
             unregisterVolumeReceiver()
+        }
+
+        updateTileStateExternal()
+
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(
+            NOTIFICATION_ID,
+            buildNotification(lastTitle.ifEmpty { "MusicBridge" }, lastArtist.ifEmpty { "Hazır" })
+        )
+    }
+
+    fun isVolumeSyncEnabled(): Boolean = isVolumeSyncEnabled
+
+    private fun updateTileStateExternal() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            try {
+                android.service.quicksettings.TileService.requestListeningState(
+                    this,
+                    ComponentName(this, MusicBridgeTileService::class.java)
+                )
+            } catch (e: Exception) {}
         }
     }
 
@@ -480,6 +521,19 @@ class MediaBridgeService : Service() {
     }
 
     private fun buildNotification(title: String, subtitle: String): Notification {
+        val toggleVolumeIntent = Intent(this, MediaBridgeService::class.java).apply {
+            action = ACTION_TOGGLE_VOLUME_SYNC
+        }
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        } else {
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
+        val togglePending = PendingIntent.getService(this, 1002, toggleVolumeIntent, flags)
+
+        val syncLabel = if (isVolumeSyncEnabled) "🔊 Ses Senkronu: Açık" else "🔇 Ses Senkronu: Kapalı"
+        val syncIcon = if (isVolumeSyncEnabled) android.R.drawable.ic_lock_silent_mode_off else android.R.drawable.ic_lock_silent_mode
+
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(subtitle)
@@ -487,6 +541,7 @@ class MediaBridgeService : Service() {
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .addAction(syncIcon, syncLabel, togglePending)
             .build()
     }
 

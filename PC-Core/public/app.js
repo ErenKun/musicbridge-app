@@ -966,6 +966,9 @@ async function fetchNetworkStatus() {
     if (startupToggle && typeof data.startup === 'boolean') {
       startupToggle.checked = data.startup;
     }
+
+    // Telefon Donanım Ses Senkronu Kontrolü
+    checkVolumeSyncUI();
   } catch (e) {
     const pingBadge = document.getElementById('ping-badge');
     if (pingBadge) pingBadge.innerText = 'Koptu';
@@ -1208,6 +1211,23 @@ async function toggleStartup(enable) {
     }
   } catch (e) {
     showToast('Ayar kaydedilemedi.');
+  }
+}
+
+// Telefon & PC Donanım Ses Senkronu
+function checkVolumeSyncUI() {
+  if (window.ErenBridge && typeof window.ErenBridge.isVolumeSyncEnabled === 'function') {
+    const card = document.getElementById('volume-sync-card');
+    const toggle = document.getElementById('volume-sync-toggle');
+    if (card) card.style.display = 'block';
+    if (toggle) toggle.checked = window.ErenBridge.isVolumeSyncEnabled();
+  }
+}
+
+function toggleVolumeSync(enabled) {
+  if (window.ErenBridge && typeof window.ErenBridge.setVolumeSyncEnabled === 'function') {
+    window.ErenBridge.setVolumeSyncEnabled(enabled);
+    showToast(enabled ? '🔊 PC Ses Senkronu Açıldı' : '🔇 PC Ses Senkronu Kapatıldı');
   }
 }
 

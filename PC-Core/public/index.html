@@ -292,6 +292,20 @@
         </div>
       </div>
 
+      <!-- Telefon & PC Ses Senkronu (Android Sistem Tepsisi & Ses Tuşları) -->
+      <div class="net-card" id="volume-sync-card" style="display: none;">
+        <div class="toggle-row">
+          <div>
+            <div style="font-weight: 600; font-size: 0.9rem;">Telefonun Sesine Göre PC Sesini Değiştir</div>
+            <div class="help-text">Telefonun ses tuşlarına veya saatinize bastığınızda PC sistem sesini anlık senkronize eder</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="volume-sync-toggle" onchange="toggleVolumeSync(this.checked)">
+            <span class="slider round"></span>
+          </label>
+        </div>
+      </div>
+
       <!-- Tailscale Rehberi -->
       <div class="net-card">
         <h3>🌐 Tailscale ile Her Yerden Erişim</h3>

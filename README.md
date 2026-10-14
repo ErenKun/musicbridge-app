@@ -52,6 +52,7 @@ Geleneksel uzaktan kumanda araçlarının aksine, **saatinize harici hiçbir uyg
 ## ✨ Öne Çıkan Özellikler
 
 * ⌚ **Sıfır Kurulumlu Saat Kontrolü:** Saatinize ek uygulama kurmadan; Play, Pause, Sonraki Parça ve PC Sistem Sesini doğrudan bileğinizden yönetin.
+* 🔊 **Donanım Ses Senkronu (Android Sistem Tepsisi & Hızlı Ayarlar):** Android bildirim alanından veya Hızlı Ayarlar kutucuğundan tek dokunuşla "PC Ses Senkronu" özelliğini açıp kapatabilirsiniz. Açıkken telefonunuzun veya saatinizin ses tuşlarına bastığınızda bilgisayarınızın ana sistem sesi birebir değişir.
 * 🔄 **Telefonda Anında Devam:** Bilgisayar başından ayrılırken tek tıkla şarkıyı telefonunuzda **kaldığı saniyeden** (örn: `02:18`) kulaklığınızda başlatın.
 * 🎤 **Akıllı Şarkı Sözleri (YouTube Music & Musixmatch Lisanslı DOM + Canlı Senkron):** Türk halk müziğinden türkülere ve popüler şarkılara kadar YouTube Music'in sağladığı zengin söz kütüphanesini ve LRCLIB canlı senkronunu anında telefona taşır. Özel söz arama desteği mevcuttur.
 * 📋 **Akıllı Kuyruk & YouTube.com Playlist Desteği:** Hem `music.youtube.com` hem de standart `youtube.com` çalma listeleri ve Mix'lerini otomatik yakalar. Şarkıya tıklayınca anında geçer; **"Sıradaki Yap"** butonuyla mevcut şarkı bitince devam edilecek parçayı belirler.
